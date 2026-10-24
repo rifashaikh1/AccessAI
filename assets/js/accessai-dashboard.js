@@ -48,7 +48,11 @@
     function renderExplanation(cell, result) {
         if (result.error) {
             cell.innerHTML =
-                '<span class="accessai-ai-error" title="' + escAttr(result.error) + '">⚠ AI unavailable</span>';
+                '<details class="accessai-explain">' +
+                '<summary style="color:#b91c1c;">⚠ AI error — click for details</summary>' +
+                '<div class="accessai-explain-body" style="border-left-color:#b91c1c;">' +
+                '<p style="color:#b91c1c;font-size:0.82rem;">' + esc(result.error) + '</p>' +
+                '</div></details>';
             return;
         }
         var html =
@@ -333,9 +337,43 @@
     function escAttr(str) { return esc(str); }
 
     /* ------------------------------------------------------------------ */
+    /* Test Gemini connection button                                         */
+    /* ------------------------------------------------------------------ */
+    function initTestButton() {
+        var btn = document.getElementById("accessai-test-btn");
+        var result = document.getElementById("accessai-test-result");
+        if (!btn || !result) return;
+
+        btn.addEventListener("click", function () {
+            btn.disabled = true;
+            result.style.color = "#646970";
+            result.textContent = "Testing…";
+
+            ajaxPost("accessai_test_connection", {})
+                .then(function (resp) {
+                    if (resp.success) {
+                        result.style.color = "#186a3b";
+                        result.textContent = "✓ " + resp.data.message;
+                    } else {
+                        result.style.color = "#b91c1c";
+                        result.textContent = "✗ " + (resp.data && resp.data.message ? resp.data.message : "Unknown error");
+                    }
+                })
+                .catch(function (err) {
+                    result.style.color = "#b91c1c";
+                    result.textContent = "✗ Network error: " + err.message;
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                });
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Bootstrap                                                             */
     /* ------------------------------------------------------------------ */
     document.addEventListener("DOMContentLoaded", function () {
+        initTestButton();
         initContrastScan();
         initManualAiForm();
 

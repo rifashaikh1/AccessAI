@@ -122,6 +122,17 @@ function accessai_render_dashboard() {
 					Add <code>define( 'ACCESSAI_GEMINI_API_KEY', 'your-key' );</code> to <code>wp-config.php</code>.
 				</p>
 			</div>
+		<?php else : ?>
+			<div class="notice notice-info inline accessai-notice" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+				<p style="margin:0;">
+					<strong>Gemini API key detected.</strong>
+					Click <em>Test Connection</em> to verify it works.
+				</p>
+				<button id="accessai-test-btn" type="button" class="button button-secondary">
+					Test Gemini Connection
+				</button>
+				<span id="accessai-test-result" style="font-size:0.88rem;"></span>
+			</div>
 		<?php endif; ?>
 
 		<!-- Score overview -->

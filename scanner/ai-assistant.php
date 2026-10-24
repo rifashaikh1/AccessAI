@@ -4,6 +4,78 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * AJAX: Test the Gemini connection and return raw diagnostic info.
+ * Accessible only to manage_options users. Used by the dashboard test button.
+ */
+add_action( 'wp_ajax_accessai_test_connection', 'accessai_test_connection' );
+
+function accessai_test_connection() {
+	check_ajax_referer( 'accessai_ai_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( array( 'message' => 'Permission denied.' ), 403 );
+	}
+
+	if ( ! defined( 'ACCESSAI_GEMINI_API_KEY' ) || ! ACCESSAI_GEMINI_API_KEY ) {
+		wp_send_json_error( array(
+			'message' => 'ACCESSAI_GEMINI_API_KEY is not defined in wp-config.php.',
+			'step'    => 'key_check',
+		) );
+	}
+
+	// Minimal prompt — just enough to get a valid Gemini response.
+	$request_body = wp_json_encode( array(
+		'contents' => array(
+			array( 'parts' => array( array( 'text' => 'Reply with the single word: ok' ) ) ),
+		),
+		'generationConfig' => array( 'maxOutputTokens' => 10 ),
+	) );
+
+	$response = wp_remote_post(
+		'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+		array(
+			'method'  => 'POST',
+			'timeout' => 20,
+			'headers' => array(
+				'Content-Type'   => 'application/json',
+				'Accept'         => 'application/json',
+				'x-goog-api-key' => ACCESSAI_GEMINI_API_KEY,
+			),
+			'body'    => $request_body,
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		wp_send_json_error( array(
+			'message' => 'Network error: ' . $response->get_error_message(),
+			'step'    => 'network',
+		) );
+	}
+
+	$status = wp_remote_retrieve_response_code( $response );
+	$body   = json_decode( wp_remote_retrieve_body( $response ), true );
+
+	$google_error = is_array( $body ) && isset( $body['error']['message'] )
+		? $body['error']['message']
+		: null;
+
+	if ( $status < 200 || $status >= 300 ) {
+		wp_send_json_error( array(
+			'message' => 'Gemini returned HTTP ' . $status . ( $google_error ? ': ' . $google_error : '' ),
+			'status'  => $status,
+			'step'    => 'gemini_http',
+		) );
+	}
+
+	$reply = $body['candidates'][0]['content']['parts'][0]['text'] ?? '(no text)';
+
+	wp_send_json_success( array(
+		'message' => 'Gemini connection OK. Reply: ' . sanitize_text_field( $reply ),
+		'status'  => $status,
+	) );
+}
+
+/**
  * Call Gemini securely from the WordPress server.
  * The API key is never sent to browser JavaScript.
  */
@@ -422,7 +494,7 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-css',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/css/accessai-dashboard.css',
 		array(),
-		'1.1.0'
+		'1.1.1'
 	);
 
 	wp_enqueue_script(
