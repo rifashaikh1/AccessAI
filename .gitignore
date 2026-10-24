@@ -1,0 +1,16 @@
+# Secrets
+.env
+.env.*
+!.env.example
+wp-config.php
+
+# Dependencies and generated files
+vendor/
+node_modules/
+__pycache__/
+*.pyc
+
+# Local/editor files
+.vscode/
+.DS_Store
+Thumbs.db
