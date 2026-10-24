@@ -1,551 +1,563 @@
-
 <?php
 /**
  * Plugin Name: AccessAI
  * Description: AI-assisted accessibility auditing for WordPress websites.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: AccessAI Team
  * License: GPL-2.0-or-later
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
-require_once plugin_dir_path( __FILE__ )
-    . 'scanner/alt-text.php';
 
-require_once plugin_dir_path( __FILE__ )
-    . 'scanner/heading-structure.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/alt-text.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/heading-structure.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/form-labels.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/ai-assistant.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/contrast-scan.php';
 
-require_once plugin_dir_path( __FILE__ )
-    . 'scanner/form-labels.php';
-
-require_once plugin_dir_path( __FILE__ )
-    . 'scanner/ai-assistant.php';
-
-// Add AccessAI to the WordPress admin sidebar.
+// Register admin menu.
 add_action( 'admin_menu', 'accessai_register_menu' );
 
+/**
+ * Load contrast-scanner.js on public frontend pages for logged-in admins.
+ * This is required for the scan iframe to work — the script must be present
+ * on the target page so it can read computed styles and send results back.
+ */
+add_action( 'wp_enqueue_scripts', 'accessai_load_contrast_scanner_frontend' );
+
+function accessai_load_contrast_scanner_frontend() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	wp_enqueue_script(
+		'accessai-contrast-scanner',
+		plugin_dir_url( __FILE__ ) . 'assets/js/contrast-scanner.js',
+		array(),
+		'1.1.0',
+		true
+	);
+}
+
 function accessai_register_menu() {
-    add_menu_page(
-        'AccessAI Dashboard',
-        'AccessAI',
-        'manage_options',
-        'accessai',
-        'accessai_render_dashboard',
-        'dashicons-universal-access-alt',
-        30
-    );
-}
-
-// Display the dashboard.
-function accessai_render_dashboard() {
-    $issues = accessai_scan_missing_alt_text();
-    $heading_issues = accessai_scan_heading_structure();
-    $form_issues = accessai_scan_form_labels();
-   $user_id = get_current_user_id();
-
-$contrast_results = get_transient(
-    'accessai_contrast_results_' . $user_id
-);
-
-$contrast_scan_completed = get_transient(
-    'accessai_contrast_scan_completed_' . $user_id
-);
-
-if ( ! is_array( $contrast_results ) ) {
-    $contrast_results = array();
-}
-
-
-$total_issues = count( $issues )
-    + count( $heading_issues )
-    + count( $form_issues )
-    + count( $contrast_results );
-
-$warnings = $total_issues;
-
-// A preliminary project metric, not a WCAG compliance score.
-// This uses the number of findings as a simple penalty.
-$total_content_items = get_posts(
-    array(
-        'post_type'      => array( 'page', 'post' ),
-        'post_status'    => 'publish',
-        'posts_per_page' => -1,
-        'fields'         => 'ids',
-    )
-);
-
-$items_scanned = count( $total_content_items );
-
-$checks_estimated = max( 1, $items_scanned * 3 );
-
-$passed_checks = max(
-    0,
-    $checks_estimated - $total_issues
-);
-
-$accessibility_score = round(
-    ( $passed_checks / $checks_estimated ) * 100
-);
-
-$accessibility_score = min(
-    100,
-    max( 0, $accessibility_score )
-);
-
-    ?>
-
-
-    <div class="wrap">
-        <h1>AccessAI Dashboard</h1>
-
-        <p>
-            Welcome to AccessAI — your WordPress accessibility assistant.
-        </p>
-         
-       
-<h2>Alt Text Scan Results</h2>
-
-<?php if ( empty( $issues ) ) : ?>
-
-    <div class="notice notice-success inline">
-        <p>No missing or empty alt text issues were found in the scanned content.</p>
-    </div>
-
-<?php else : ?>
-
-    <p>
-        Found <strong><?php echo esc_html( count( $issues ) ); ?></strong>
-        image(s) that need alt text review.
-    </p>
-
-    <table class="widefat striped">
-        <thead>
-            <tr>
-                <th>Issue</th>
-                <th>Severity</th>
-                <th>Page</th>
-                <th>Image Source</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            <?php foreach ( $issues as $issue ) : ?>
-                <tr>
-                    <td>
-                        <?php echo esc_html( $issue['type'] ); ?>
-                    </td>
-
-                    <td>
-                        <span style="color:#b45309;font-weight:600;">
-                            <?php echo esc_html( $issue['severity'] ); ?>
-                        </span>
-                    </td>
-
-                    <td>
-                        <?php echo esc_html( $issue['page_title'] ); ?>
-                    </td>
-
-                    <td>
-                        <?php if ( ! empty( $issue['image_src'] ) ) : ?>
-                            <?php echo esc_html( $issue['image_src'] ); ?>
-                        <?php else : ?>
-                            Image source unavailable
-                        <?php endif; ?>
-                    </td>
-
-                    <td>
-                        <a
-                            class="button button-secondary"
-                            href="<?php echo esc_url( get_edit_post_link( $issue['page_id'] ) ); ?>"
-                        >
-                            Edit Page
-                        </a>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-
-<?php endif; ?>
-
-
-<hr>
-
-<h2>Heading Structure Scan Results</h2>
-
-<?php if ( empty( $heading_issues ) ) : ?>
-
-    <div class="notice notice-success inline">
-        <p>No skipped heading levels were detected in the scanned content.</p>
-    </div>
-
-<?php else : ?>
-
-    <p>
-        Found <strong><?php echo esc_html( count( $heading_issues ) ); ?></strong>
-        possible heading hierarchy issue(s).
-    </p>
-
-    <table class="widefat striped">
-        <thead>
-            <tr>
-                <th>Issue</th>
-                <th>Page</th>
-                <th>Heading Transition</th>
-                <th>Heading Text</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            <?php foreach ( $heading_issues as $issue ) : ?>
-                <tr>
-                    <td><?php echo esc_html( $issue['type'] ); ?></td>
-
-                    <td><?php echo esc_html( $issue['page_title'] ); ?></td>
-
-                    <td>
-                        <?php
-                        echo esc_html(
-                            $issue['previous'] . ' → ' . $issue['current']
-                        );
-                        ?>
-                    </td>
-
-                    <td>
-                        <?php
-                        echo esc_html(
-                            $issue['heading_text'] ?: '(Empty heading)'
-                        );
-                        ?>
-                    </td>
-
-                    <td>
-                        <a
-                            class="button button-secondary"
-                            href="<?php echo esc_url( get_edit_post_link( $issue['page_id'] ) ); ?>"
-                        >
-                            Edit Page
-                        </a>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-
-<?php endif; ?>
-
-
-<hr>
-
-<h2>Form Label Scan Results</h2>
-
-<?php if ( empty( $form_issues ) ) : ?>
-
-    <div class="notice notice-success inline">
-        <p>No potentially unlabeled form controls were found in the scanned content.</p>
-    </div>
-
-<?php else : ?>
-
-    <p>
-        Found <strong><?php echo esc_html( count( $form_issues ) ); ?></strong>
-        form control(s) that need review.
-    </p>
-
-    <table class="widefat striped">
-        <thead>
-            <tr>
-                <th>Issue</th>
-                <th>Page</th>
-                <th>Control</th>
-                <th>Field Name</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            <?php foreach ( $form_issues as $issue ) : ?>
-                <tr>
-                    <td><?php echo esc_html( $issue['type'] ); ?></td>
-                    <td><?php echo esc_html( $issue['page_title'] ); ?></td>
-                    <td>
-                        <?php echo esc_html( $issue['control'] ); ?>
-                        <?php if ( $issue['field_type'] !== '' ) : ?>
-                            (<?php echo esc_html( $issue['field_type'] ); ?>)
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php echo esc_html( $issue['field_name'] ?: 'Not specified' ); ?>
-                    </td>
-                    <td>
-                        <a
-                            class="button button-secondary"
-                            href="<?php echo esc_url( get_edit_post_link( $issue['page_id'] ) ); ?>"
-                        >
-                            Edit Page
-                        </a>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-
-<?php endif; ?>
-
-
-<hr>
-
-<h2>Color Contrast Scan Results</h2>
-
-<?php if ( ! $contrast_scan_completed ) : ?>
-
-    <div class="notice notice-info inline">
-        <p>
-            No contrast scan has been completed yet.
-            Open your published test page and run the scan first.
-        </p>
-    </div>
-
-<?php elseif ( empty( $contrast_results ) ) : ?>
-
-    <div class="notice notice-success inline">
-        <p>
-            Scan completed. No potential contrast failures were detected
-            among the text elements checked.
-        </p>
-    </div>
-
-<?php else : ?>
-
-    <p>
-        Found
-        <strong><?php echo esc_html( count( $contrast_results ) ); ?></strong>
-        potential contrast issue(s).
-    </p>
-
-    <table class="widefat striped">
-        <thead>
-            <tr>
-                <th>Element</th>
-                <th>Text</th>
-                <th>Contrast Ratio</th>
-                <th>Required Ratio</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            <?php foreach ( $contrast_results as $result ) : ?>
-                <tr>
-                    <td>
-                        <?php echo esc_html( $result['element'] ); ?>
-                    </td>
-                    <td>
-                        <?php echo esc_html( $result['text'] ); ?>
-                    </td>
-                    <td>
-                        <?php echo esc_html( $result['ratio'] ); ?>
-                    </td>
-                    <td>
-                        <?php echo esc_html( $result['required'] ); ?>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-
-<?php endif; ?>
-
-
-        <div style="
-            background:#ffffff;
-            padding:24px;
-            margin-top:20px;
-            border:1px solid #dcdcde;
-            border-radius:10px;
-            max-width:850px;
-        ">
-            <h2>Website Accessibility Overview</h2>
-
-            
-<div style="
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-    gap:16px;
-    margin:20px 0;
-">
-    <div style="background:#ffffff;padding:20px;border:1px solid #dcdcde;border-radius:10px;">
-        <p style="margin:0;color:#50575e;">Accessibility Score</p>
-        <h2 style="font-size:32px;margin:8px 0;">
-            <?php echo esc_html( $accessibility_score ); ?>/100
-        </h2>
-        <p style="margin:0;color:#646970;">Preliminary project metric</p>
-    </div>
-
-    <div style="background:#ffffff;padding:20px;border:1px solid #dcdcde;border-radius:10px;">
-        <p style="margin:0;color:#50575e;">Total Findings</p>
-        <h2 style="font-size:32px;margin:8px 0;">
-            <?php echo esc_html( $total_issues ); ?>
-        </h2>
-        <p style="margin:0;color:#646970;">Across current scanners</p>
-    </div>
-
-    <div style="background:#ffffff;padding:20px;border:1px solid #dcdcde;border-radius:10px;">
-        <p style="margin:0;color:#50575e;">Warnings</p>
-        <h2 style="font-size:32px;margin:8px 0;">
-            <?php echo esc_html( $warnings ); ?>
-        </h2>
-        <p style="margin:0;color:#646970;">Findings needing review</p>
-    </div>
-
-    <div style="background:#ffffff;padding:20px;border:1px solid #dcdcde;border-radius:10px;">
-        <p style="margin:0;color:#50575e;">Estimated Passed Checks</p>
-        <h2 style="font-size:32px;margin:8px 0;">
-            <?php echo esc_html( $passed_checks ); ?>
-        </h2>
-        <p style="margin:0;color:#646970;">Estimated, not a full audit</p>
-    </div>
-</div>
-
-
-            <p>
-                Your accessibility scan results will appear here.
-            </p>
-
-            <div style="display:flex; gap:20px; flex-wrap:wrap;">
-                <div style="background:#fef2f2;padding:18px;border-radius:8px;min-width:140px;">
-                    <strong>Critical Issues</strong>
-                    <h2>0</h2>
-                </div>
-
-                <div style="background:#fff7ed;padding:18px;border-radius:8px;min-width:140px;">
-                    <strong>Warnings</strong>
-                    <h2>0</h2>
-                </div>
-
-                <div style="background:#f0fdf4;padding:18px;border-radius:8px;min-width:140px;">
-                    <strong>Passed Checks</strong>
-                    <h2>0</h2>
-                </div>
-            </div>
-
-            <p style="margin-top:24px;">
-                <button type="button" class="button button-primary button-hero" disabled>
-                    Scanner Coming Next
-                </button>
-            </p>
-
-            <p>
-                Next: implement automatic accessibility issue detection.
-            </p>
-        </div>
-    </div>
-    <?php
+	add_menu_page(
+		'AccessAI Dashboard',
+		'AccessAI',
+		'manage_options',
+		'accessai',
+		'accessai_render_dashboard',
+		'dashicons-universal-access-alt',
+		30
+	);
 }
 
 /**
- * Load the contrast scanner on the public website for administrators.
+ * Render the full AccessAI admin dashboard.
  */
-add_action( 'wp_enqueue_scripts', 'accessai_load_contrast_scanner' );
+function accessai_render_dashboard() {
+	// Run content scanners.
+	$issues         = accessai_scan_missing_alt_text();
+	$heading_issues = accessai_scan_heading_structure();
+	$form_issues    = accessai_scan_form_labels();
 
+	$user_id = get_current_user_id();
 
-function accessai_load_contrast_scanner() {
-    if ( ! current_user_can( 'manage_options' ) ) {
-        return;
-    }
+	$contrast_results       = get_transient( 'accessai_contrast_results_' . $user_id );
+	$contrast_scan_completed = get_transient( 'accessai_contrast_scan_completed_' . $user_id );
 
-    wp_enqueue_script(
-        'accessai-contrast-scanner',
-        plugin_dir_url( __FILE__ ) . 'assets/js/contrast-scanner.js',
-        array(),
-        '1.0.2',
-        true
-    );
+	if ( ! is_array( $contrast_results ) ) {
+		$contrast_results = array();
+	}
 
-    wp_localize_script(
-        'accessai-contrast-scanner',
-        'AccessAIConfig',
-        array(
-            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-            'nonce'   => wp_create_nonce( 'accessai_contrast_scan' ),
-        )
-    );
+	$total_issues = count( $issues ) + count( $heading_issues ) + count( $form_issues ) + count( $contrast_results );
+
+	// Accessibility score (preliminary project metric, not a WCAG score).
+	$total_content_items = get_posts(
+		array(
+			'post_type'      => array( 'page', 'post' ),
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+		)
+	);
+
+	$items_scanned    = count( $total_content_items );
+	$checks_estimated = max( 1, $items_scanned * 3 );
+	$passed_checks    = max( 0, $checks_estimated - $total_issues );
+	$score            = min( 100, max( 0, round( ( $passed_checks / $checks_estimated ) * 100 ) ) );
+
+	// Published pages for the contrast scanner selector.
+	$published_pages = get_posts(
+		array(
+			'post_type'      => array( 'page', 'post' ),
+			'post_status'    => 'publish',
+			'posts_per_page' => 100,
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+		)
+	);
+
+	$has_api_key = defined( 'ACCESSAI_GEMINI_API_KEY' ) && ACCESSAI_GEMINI_API_KEY;
+
+	// Build fingerprinted issue lists for auto-explain.
+	$alt_issues_json     = accessai_build_issue_data( $issues, 'alt_text' );
+	$heading_issues_json = accessai_build_issue_data( $heading_issues, 'heading_structure' );
+	$form_issues_json    = accessai_build_issue_data( $form_issues, 'form_label' );
+	$contrast_issues_json = accessai_build_issue_data( $contrast_results, 'color_contrast' );
+
+	?>
+	<div class="wrap accessai-wrap">
+		<div class="accessai-header">
+			<h1><span class="dashicons dashicons-universal-access-alt"></span> AccessAI Dashboard</h1>
+			<p class="accessai-subtitle">AI-assisted accessibility auditing for your WordPress site.</p>
+		</div>
+
+		<?php if ( ! $has_api_key ) : ?>
+			<div class="notice notice-warning accessai-notice">
+				<p>
+					<strong>Gemini API key not configured.</strong>
+					AI explanations will not be generated.
+					Add <code>define( 'ACCESSAI_GEMINI_API_KEY', 'your-key' );</code> to <code>wp-config.php</code>.
+				</p>
+			</div>
+		<?php endif; ?>
+
+		<!-- Score overview -->
+		<div class="accessai-overview">
+			<div class="accessai-score-card accessai-score-main">
+				<p class="accessai-card-label">Accessibility Score</p>
+				<div class="accessai-score-value"><?php echo esc_html( $score ); ?><span>/100</span></div>
+				<p class="accessai-card-sub">Preliminary project metric</p>
+			</div>
+			<div class="accessai-score-card">
+				<p class="accessai-card-label">Total Findings</p>
+				<div class="accessai-score-value accessai-score-warn"><?php echo esc_html( $total_issues ); ?></div>
+				<p class="accessai-card-sub">Across all scanners</p>
+			</div>
+			<div class="accessai-score-card">
+				<p class="accessai-card-label">Pages Scanned</p>
+				<div class="accessai-score-value"><?php echo esc_html( $items_scanned ); ?></div>
+				<p class="accessai-card-sub">Published content items</p>
+			</div>
+			<div class="accessai-score-card">
+				<p class="accessai-card-label">Estimated Passed</p>
+				<div class="accessai-score-value accessai-score-pass"><?php echo esc_html( $passed_checks ); ?></div>
+				<p class="accessai-card-sub">Out of ~<?php echo esc_html( $checks_estimated ); ?> checks</p>
+			</div>
+		</div>
+
+		<!-- ============================================================
+		     CONTRAST SCAN SECTION
+		     ============================================================ -->
+		<div class="accessai-section">
+			<div class="accessai-section-header">
+				<h2>Colour Contrast Scan</h2>
+				<p>
+					Select a published page and click <strong>Scan Page</strong>. AccessAI will open
+					the page in a secure background frame, check text element contrast ratios
+					against WCAG AA thresholds, and display results here.
+				</p>
+			</div>
+
+			<?php if ( empty( $published_pages ) ) : ?>
+				<div class="notice notice-info inline"><p>No published pages or posts found to scan.</p></div>
+			<?php else : ?>
+				<div class="accessai-scan-bar">
+					<label for="accessai-page-select" class="screen-reader-text">Select page to scan</label>
+					<select id="accessai-page-select" class="accessai-page-select">
+						<?php foreach ( $published_pages as $page ) : ?>
+							<option value="<?php echo esc_attr( $page->ID ); ?>">
+								<?php echo esc_html( $page->post_title ); ?>
+								(<?php echo esc_html( ucfirst( $page->post_type ) ); ?>)
+							</option>
+						<?php endforeach; ?>
+					</select>
+					<button id="accessai-scan-btn" type="button" class="button button-primary">
+						<span class="dashicons dashicons-search" style="vertical-align:middle;margin-top:-2px;"></span>
+						Scan Page
+					</button>
+					<button id="accessai-clear-contrast-btn" type="button" class="button button-secondary">
+						Clear Results
+					</button>
+				</div>
+
+				<div id="accessai-scan-status" class="accessai-scan-status" role="status" aria-live="polite"></div>
+				<div id="accessai-iframe-container"></div>
+			<?php endif; ?>
+
+			<?php if ( ! $contrast_scan_completed ) : ?>
+				<div class="notice notice-info inline" id="accessai-no-contrast-notice">
+					<p>No contrast scan completed yet. Select a page above and click <strong>Scan Page</strong>.</p>
+				</div>
+			<?php elseif ( empty( $contrast_results ) ) : ?>
+				<div class="notice notice-success inline">
+					<p>Scan complete — no contrast failures detected among the text elements checked.</p>
+				</div>
+			<?php else : ?>
+				<p>
+					Found <strong><?php echo esc_html( count( $contrast_results ) ); ?></strong>
+					potential contrast issue(s). AI explanations load automatically below.
+				</p>
+
+				<table class="widefat striped accessai-table" id="accessai-contrast-table"
+					   data-issues="<?php echo esc_attr( wp_json_encode( $contrast_issues_json ) ); ?>">
+					<thead>
+						<tr>
+							<th>Element</th>
+							<th>Text Sample</th>
+							<th>Contrast Ratio</th>
+							<th>Required</th>
+							<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $contrast_results as $idx => $result ) :
+							$fp = md5( 'color_contrast|' . ( $result['element'] ?? '' ) . '|' . ( $result['text'] ?? '' ) . '|' . ( $result['ratio'] ?? '' ) );
+						?>
+							<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+								<td><?php echo esc_html( $result['element'] ?? '' ); ?></td>
+								<td><?php echo esc_html( $result['text'] ?? '' ); ?></td>
+								<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $result['ratio'] ?? '' ); ?></span></td>
+								<td><?php echo esc_html( $result['required'] ?? '' ); ?></td>
+								<td class="accessai-ai-cell">
+									<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+
+		<!-- ============================================================
+		     ALT TEXT SCAN RESULTS
+		     ============================================================ -->
+		<div class="accessai-section">
+			<div class="accessai-section-header">
+				<h2>Alt Text Scan Results</h2>
+			</div>
+
+			<?php if ( empty( $issues ) ) : ?>
+				<div class="notice notice-success inline">
+					<p>No missing or empty alt text issues found.</p>
+				</div>
+			<?php else : ?>
+				<p>Found <strong><?php echo esc_html( count( $issues ) ); ?></strong> image(s) needing alt text review.</p>
+
+				<table class="widefat striped accessai-table" id="accessai-alt-table"
+					   data-issues="<?php echo esc_attr( wp_json_encode( $alt_issues_json ) ); ?>">
+					<thead>
+						<tr>
+							<th>Issue</th>
+							<th>Severity</th>
+							<th>Page</th>
+							<th>Image Source</th>
+							<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $issues as $issue ) :
+							$fp = md5( 'alt_text|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['image_src'] ?? '' ) );
+						?>
+							<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+								data-page-id="<?php echo esc_attr( $issue['page_id'] ?? '' ); ?>"
+								data-image-src="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>">
+								<td><?php echo esc_html( $issue['type'] ); ?></td>
+								<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $issue['severity'] ); ?></span></td>
+								<td><?php echo esc_html( $issue['page_title'] ); ?></td>
+								<td class="accessai-truncate">
+									<?php echo $issue['image_src'] ? esc_html( $issue['image_src'] ) : 'N/A'; ?>
+								</td>
+								<td class="accessai-ai-cell">
+									<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+								</td>
+								<td>
+									<a class="button button-secondary"
+									   href="<?php echo esc_url( get_edit_post_link( $issue['page_id'] ) ); ?>">
+										Edit Page
+									</a>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+
+		<!-- ============================================================
+		     HEADING STRUCTURE SCAN RESULTS
+		     ============================================================ -->
+		<div class="accessai-section">
+			<div class="accessai-section-header">
+				<h2>Heading Structure Scan Results</h2>
+			</div>
+
+			<?php if ( empty( $heading_issues ) ) : ?>
+				<div class="notice notice-success inline">
+					<p>No skipped heading levels detected.</p>
+				</div>
+			<?php else : ?>
+				<p>Found <strong><?php echo esc_html( count( $heading_issues ) ); ?></strong> possible heading hierarchy issue(s).</p>
+
+				<table class="widefat striped accessai-table" id="accessai-heading-table"
+					   data-issues="<?php echo esc_attr( wp_json_encode( $heading_issues_json ) ); ?>">
+					<thead>
+						<tr>
+							<th>Issue</th>
+							<th>Page</th>
+							<th>Heading Transition</th>
+							<th>Heading Text</th>
+							<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $heading_issues as $issue ) :
+							$fp = md5( 'heading_structure|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['previous'] ?? '' ) . '|' . ( $issue['current'] ?? '' ) . '|' . ( $issue['heading_text'] ?? '' ) );
+						?>
+							<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+								<td><?php echo esc_html( $issue['type'] ); ?></td>
+								<td><?php echo esc_html( $issue['page_title'] ); ?></td>
+								<td><?php echo esc_html( $issue['previous'] . ' → ' . $issue['current'] ); ?></td>
+								<td><?php echo esc_html( $issue['heading_text'] ?: '(Empty heading)' ); ?></td>
+								<td class="accessai-ai-cell">
+									<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+								</td>
+								<td>
+									<a class="button button-secondary"
+									   href="<?php echo esc_url( get_edit_post_link( $issue['page_id'] ) ); ?>">
+										Edit Page
+									</a>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+
+		<!-- ============================================================
+		     FORM LABEL SCAN RESULTS
+		     ============================================================ -->
+		<div class="accessai-section">
+			<div class="accessai-section-header">
+				<h2>Form Label Scan Results</h2>
+			</div>
+
+			<?php if ( empty( $form_issues ) ) : ?>
+				<div class="notice notice-success inline">
+					<p>No potentially unlabeled form controls found.</p>
+				</div>
+			<?php else : ?>
+				<p>Found <strong><?php echo esc_html( count( $form_issues ) ); ?></strong> form control(s) needing review.</p>
+
+				<table class="widefat striped accessai-table" id="accessai-form-table"
+					   data-issues="<?php echo esc_attr( wp_json_encode( $form_issues_json ) ); ?>">
+					<thead>
+						<tr>
+							<th>Issue</th>
+							<th>Page</th>
+							<th>Control</th>
+							<th>Field Name</th>
+							<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $form_issues as $issue ) :
+							$fp = md5( 'form_label|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['control'] ?? '' ) . '|' . ( $issue['field_name'] ?? '' ) );
+						?>
+							<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+								<td><?php echo esc_html( $issue['type'] ); ?></td>
+								<td><?php echo esc_html( $issue['page_title'] ); ?></td>
+								<td>
+									<?php echo esc_html( $issue['control'] ); ?>
+									<?php if ( $issue['field_type'] !== '' ) : ?>
+										(<?php echo esc_html( $issue['field_type'] ); ?>)
+									<?php endif; ?>
+								</td>
+								<td><?php echo esc_html( $issue['field_name'] ?: 'Not specified' ); ?></td>
+								<td class="accessai-ai-cell">
+									<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+								</td>
+								<td>
+									<a class="button button-secondary"
+									   href="<?php echo esc_url( get_edit_post_link( $issue['page_id'] ) ); ?>">
+										Edit Page
+									</a>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+
+		<!-- ============================================================
+		     MANUAL AI ASSISTANT PANEL
+		     ============================================================ -->
+		<div class="accessai-section">
+			<div class="accessai-section-header">
+				<h2>AI Assistant — Manual Query</h2>
+				<p>Paste any accessibility finding to get a detailed explanation and suggested fix. No content is modified automatically.</p>
+			</div>
+
+			<form id="accessai-ai-form">
+				<p>
+					<label for="accessai-issue-type"><strong>Issue category</strong></label><br>
+					<select id="accessai-issue-type" style="min-width:260px">
+						<option value="alt_text">Missing image alt text</option>
+						<option value="heading_structure">Heading structure</option>
+						<option value="form_label">Form labels</option>
+						<option value="color_contrast">Colour contrast</option>
+						<option value="other">Other accessibility issue</option>
+					</select>
+				</p>
+				<p>
+					<label for="accessai-issue-details"><strong>Issue details</strong></label><br>
+					<textarea id="accessai-issue-details" rows="5" maxlength="5000"
+						style="width:100%;max-width:760px"
+						placeholder="Describe the finding and include relevant, non-sensitive details."></textarea>
+				</p>
+				<p>
+					<button type="submit" class="button button-primary">Explain with AI &amp; Preview Fix</button>
+				</p>
+			</form>
+
+			<p id="accessai-ai-message" role="status" aria-live="polite"></p>
+			<div id="accessai-ai-preview"></div>
+			<p>
+				<button id="accessai-apply-button" type="button" class="button button-primary" hidden style="display:none !important;">
+					Apply Fix
+				</button>
+			</p>
+			<p><small>Previewing never changes site content. Automatic application is restricted to reviewed image alt text.</small></p>
+		</div>
+
+	</div><!-- .accessai-wrap -->
+	<?php
 }
 
+/**
+ * Build issue data arrays suitable for auto-explain JS consumption.
+ * Each item gets a fingerprint, type, and salient details string.
+ */
+function accessai_build_issue_data( $issues, $type ) {
+	$data = array();
 
-add_action(
-    'wp_ajax_accessai_save_contrast_results',
-    'accessai_save_contrast_results'
-);
+	foreach ( $issues as $issue ) {
+		switch ( $type ) {
+			case 'alt_text':
+				$details = 'Page: ' . ( $issue['page_title'] ?? '' ) .
+					'. Image src: ' . ( $issue['image_src'] ?? 'unknown' ) .
+					'. Issue: ' . ( $issue['message'] ?? 'Missing or empty alt text.' );
+				$fp_key  = 'alt_text|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['image_src'] ?? '' );
+				break;
+
+			case 'heading_structure':
+				$details = 'Page: ' . ( $issue['page_title'] ?? '' ) .
+					'. Heading transition: ' . ( $issue['previous'] ?? '' ) . ' to ' . ( $issue['current'] ?? '' ) .
+					'. Heading text: ' . ( $issue['heading_text'] ?? '(empty)' );
+				$fp_key  = 'heading_structure|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['previous'] ?? '' ) . '|' . ( $issue['current'] ?? '' ) . '|' . ( $issue['heading_text'] ?? '' );
+				break;
+
+			case 'form_label':
+				$details = 'Page: ' . ( $issue['page_title'] ?? '' ) .
+					'. Control: ' . ( $issue['control'] ?? '' ) .
+					' (type: ' . ( $issue['field_type'] ?? 'unspecified' ) . ')' .
+					'. Field name: ' . ( $issue['field_name'] ?? 'not specified' );
+				$fp_key  = 'form_label|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['control'] ?? '' ) . '|' . ( $issue['field_name'] ?? '' );
+				break;
+
+			case 'color_contrast':
+				$details = 'Element: ' . ( $issue['element'] ?? '' ) .
+					'. Text: ' . ( $issue['text'] ?? '' ) .
+					'. Contrast ratio: ' . ( $issue['ratio'] ?? '' ) .
+					'. Required ratio: ' . ( $issue['required'] ?? '' );
+				$fp_key  = 'color_contrast|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['text'] ?? '' ) . '|' . ( $issue['ratio'] ?? '' );
+				break;
+
+			default:
+				continue 2;
+		}
+
+		$fp     = md5( $fp_key );
+		$data[] = array(
+			'fingerprint' => $fp,
+			'type'        => $type,
+			'details'     => $details,
+		);
+	}
+
+	return $data;
+}
+
+/**
+ * AJAX: Save contrast scan results sent from the scan iframe.
+ */
+add_action( 'wp_ajax_accessai_save_contrast_results', 'accessai_save_contrast_results' );
 
 function accessai_save_contrast_results() {
-    check_ajax_referer( 'accessai_contrast_scan', 'nonce' );
+	check_ajax_referer( 'accessai_contrast_scan', 'nonce' );
 
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error(
-            array( 'message' => 'Permission denied.' ),
-            403
-        );
-    }
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( array( 'message' => 'Permission denied.' ), 403 );
+	}
 
-    $raw_results = isset( $_POST['results'] )
-        ? wp_unslash( $_POST['results'] )
-        : '';
+	$raw_results = isset( $_POST['results'] ) ? wp_unslash( $_POST['results'] ) : '';
+	$results     = json_decode( $raw_results, true );
 
-    $results = json_decode( $raw_results, true );
+	if ( ! is_array( $results ) ) {
+		wp_send_json_error( array( 'message' => 'Invalid scan results.' ), 400 );
+	}
 
-    if ( ! is_array( $results ) ) {
-        wp_send_json_error(
-            array( 'message' => 'Invalid scan results.' ),
-            400
-        );
-    }
+	$safe_results = array();
 
-    $safe_results = array();
+	foreach ( array_slice( $results, 0, 500 ) as $result ) {
+		if ( ! is_array( $result ) ) {
+			continue;
+		}
 
-    foreach ( array_slice( $results, 0, 500 ) as $result ) {
-        if ( ! is_array( $result ) ) {
-            continue;
-        }
+		$safe_results[] = array(
+			'element'  => sanitize_text_field( $result['element'] ?? '' ),
+			'text'     => sanitize_text_field( $result['text'] ?? '' ),
+			'ratio'    => sanitize_text_field( $result['ratio'] ?? '' ),
+			'required' => sanitize_text_field( $result['required'] ?? '' ),
+		);
+	}
 
-        $safe_results[] = array(
-            'element' => sanitize_text_field(
-                $result['element'] ?? ''
-            ),
-            'text' => sanitize_text_field(
-                $result['text'] ?? ''
-            ),
-            'ratio' => sanitize_text_field(
-                $result['ratio'] ?? ''
-            ),
-            'required' => sanitize_text_field(
-                $result['required'] ?? ''
-            ),
-        );
-    }
+	$user_id = get_current_user_id();
 
-    $user_id = get_current_user_id();
+	set_transient( 'accessai_contrast_results_' . $user_id, $safe_results, HOUR_IN_SECONDS );
+	set_transient( 'accessai_contrast_scan_completed_' . $user_id, true, HOUR_IN_SECONDS );
 
-set_transient(
-    'accessai_contrast_results_' . $user_id,
-    $safe_results,
-    HOUR_IN_SECONDS
-);
-
-set_transient(
-    'accessai_contrast_scan_completed_' . $user_id,
-    true,
-    HOUR_IN_SECONDS
-);
-
-    wp_send_json_success(
-        array(
-            'message' => 'Contrast results received.',
-            'count'   => count( $safe_results ),
-        )
-    );
+	wp_send_json_success(
+		array(
+			'message' => 'Contrast results received.',
+			'count'   => count( $safe_results ),
+		)
+	);
 }
 
+/**
+ * AJAX: Clear stored contrast scan results for the current user.
+ */
+add_action( 'wp_ajax_accessai_clear_contrast_results', 'accessai_clear_contrast_results' );
+
+function accessai_clear_contrast_results() {
+	check_ajax_referer( 'accessai_contrast_trigger', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( array( 'message' => 'Permission denied.' ), 403 );
+	}
+
+	$user_id = get_current_user_id();
+
+	delete_transient( 'accessai_contrast_results_' . $user_id );
+	delete_transient( 'accessai_contrast_scan_completed_' . $user_id );
+
+	wp_send_json_success( array( 'message' => 'Contrast results cleared.' ) );
+}

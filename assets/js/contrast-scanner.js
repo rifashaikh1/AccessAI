@@ -1,14 +1,17 @@
-
+/**
+ * AccessAI — Colour Contrast Scanner
+ * Runs automatically inside the secure scan iframe opened by the dashboard.
+ * Tokens are verified server-side; no credentials appear in this script.
+ */
 (function () {
     "use strict";
 
+    /* -------- colour parsing -------- */
     function parseColor(color) {
-        const match = color.match(
+        var match = color.match(
             /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)/
         );
-
         if (!match) return null;
-
         return {
             r: Number(match[1]),
             g: Number(match[2]),
@@ -18,66 +21,47 @@
     }
 
     function getLuminance(color) {
-        const channels = [color.r, color.g, color.b].map(function (value) {
-            value /= 255;
-
-            return value <= 0.04045
-                ? value / 12.92
-                : Math.pow((value + 0.055) / 1.055, 2.4);
+        var channels = [color.r, color.g, color.b].map(function (v) {
+            v /= 255;
+            return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
         });
-
-        return (
-            0.2126 * channels[0] +
-            0.7152 * channels[1] +
-            0.0722 * channels[2]
-        );
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
     }
 
-    function getContrastRatio(foreground, background) {
-        const first = getLuminance(foreground);
-        const second = getLuminance(background);
-
-        const lighter = Math.max(first, second);
-        const darker = Math.min(first, second);
-
+    function getContrastRatio(fg, bg) {
+        var l1 = getLuminance(fg);
+        var l2 = getLuminance(bg);
+        var lighter = Math.max(l1, l2);
+        var darker = Math.min(l1, l2);
         return (lighter + 0.05) / (darker + 0.05);
     }
 
     function getBackground(element) {
-        let current = element;
-
+        var current = element;
         while (current && current !== document.documentElement) {
-            const color = parseColor(
-                getComputedStyle(current).backgroundColor
-            );
-
-            if (color && color.a >= 1) {
-                return color;
-            }
-
+            var color = parseColor(getComputedStyle(current).backgroundColor);
+            if (color && color.a >= 1) return color;
             current = current.parentElement;
         }
-
-        // Assume a white page background when no opaque background
-        // is found. This assumption may be incorrect on some websites.
+        // Fall back to white (assumption; may be incorrect on some sites).
         return { r: 255, g: 255, b: 255, a: 1 };
     }
 
+    /* -------- scan -------- */
     function scanContrast() {
-        
-const elements = document.querySelectorAll(
-    "div, p, span, a, li, label, button, h1, h2, h3, h4, h5, h6, td, th"
-);
+        var elements = document.querySelectorAll(
+            "div, p, span, a, li, label, button, h1, h2, h3, h4, h5, h6, td, th"
+        );
 
-
-        const issues = [];
-        let checked = 0;
+        var issues = [];
+        var checked = 0;
+        // Deduplicate by a text+ratio key so the same block isn't reported multiple times.
+        var seen = {};
 
         elements.forEach(function (element) {
             if (!element.textContent.trim()) return;
 
-            const style = getComputedStyle(element);
-
+            var style = getComputedStyle(element);
             if (
                 style.display === "none" ||
                 style.visibility === "hidden" ||
@@ -86,124 +70,122 @@ const elements = document.querySelectorAll(
                 return;
             }
 
-            const foreground = parseColor(style.color);
-
+            var foreground = parseColor(style.color);
             if (!foreground || foreground.a < 1) return;
 
-            const background = getBackground(element);
-            const ratio = getContrastRatio(foreground, background);
-            const fontSize = parseFloat(style.fontSize);
-            const isBold = parseInt(style.fontWeight, 10) >= 700;
-
-            const isLargeText =
-                fontSize >= 24 ||
-                (fontSize >= 18.66 && isBold);
-
-            const requiredRatio = isLargeText ? 3 : 4.5;
+            var background = getBackground(element);
+            var ratio = getContrastRatio(foreground, background);
+            var fontSize = parseFloat(style.fontSize);
+            var isBold = parseInt(style.fontWeight, 10) >= 700;
+            var isLargeText = fontSize >= 24 || (fontSize >= 18.66 && isBold);
+            var required = isLargeText ? 3 : 4.5;
 
             checked++;
 
-            if (ratio < requiredRatio) {
+            if (ratio < required) {
+                var dedupeKey =
+                    element.tagName +
+                    "|" + element.textContent.trim().slice(0, 60) +
+                    "|" + ratio.toFixed(2);
+
+                if (seen[dedupeKey]) return;
+                seen[dedupeKey] = true;
+
                 issues.push({
                     element: element.tagName.toLowerCase(),
                     text: element.textContent.trim().slice(0, 100),
                     ratio: ratio.toFixed(2) + ":1",
-                    required: requiredRatio + ":1",
-                    node: element
+                    required: required + ":1"
                 });
             }
         });
 
-        console.group("AccessAI — Color Contrast Scan");
+        console.group("AccessAI — Colour Contrast Scan");
         console.log("Text elements checked:", checked);
         console.log("Potential contrast issues:", issues.length);
-
-        issues.forEach(function (issue) {
-            console.warn(
-                issue.element,
-                '"' + issue.text + '"',
-                "Contrast:", issue.ratio,
-                "Required:", issue.required,
-                issue.node
-            );
+        issues.forEach(function (i) {
+            console.warn(i.element, '"' + i.text + '"', "Contrast:", i.ratio, "Required:", i.required);
         });
-
         console.groupEnd();
 
         return issues;
     }
 
-    
-function sendContrastResults(issues) {
-    if (
-        typeof AccessAIConfig === "undefined" ||
-        !AccessAIConfig.ajaxUrl ||
-        !AccessAIConfig.nonce
-    ) {
-        console.error("AccessAI: WordPress connection is not configured.");
-        return;
-    }
+    /* -------- send results -------- */
+    function sendResults(ajaxUrl, nonce, issues) {
+        var body = new URLSearchParams();
+        body.append("action", "accessai_save_contrast_results");
+        body.append("nonce", nonce);
+        body.append("results", JSON.stringify(issues));
 
-    const formData = new URLSearchParams();
-
-    formData.append("action", "accessai_save_contrast_results");
-    formData.append("nonce", AccessAIConfig.nonce);
-    formData.append(
-        "results",
-        JSON.stringify(
-            issues.map(function (issue) {
-                return {
-                    element: issue.element,
-                    text: issue.text,
-                    ratio: issue.ratio,
-                    required: issue.required
-                };
+        return fetch(ajaxUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: body.toString()
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (resp) {
+                if (resp.success) {
+                    console.log("AccessAI: Contrast results saved. Count:", resp.data.count);
+                } else {
+                    console.error("AccessAI: Server rejected results.", resp);
+                }
             })
-        )
-    );
-
-    fetch(AccessAIConfig.ajaxUrl, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
-        },
-        body: formData.toString()
-    })
-        .then(function (response) {
-            if (!response.ok) {
-                throw new Error("HTTP " + response.status);
-            }
-
-            return response.json();
-        })
-        .then(function (response) {
-            if (response.success) {
-                console.log(
-                    "AccessAI: Contrast results sent successfully.",
-                    response.data
-                );
-            } else {
-                console.error("AccessAI: WordPress rejected the results.", response);
-            }
-        })
-        .catch(function (error) {
-            console.error("AccessAI: Could not send contrast results.", error);
-        });
-}
-
-window.AccessAIContrastScanner = {
-    scan: function () {
-        const issues = scanContrast();
-        sendContrastResults(issues);
-        return issues;
+            .catch(function (err) {
+                console.error("AccessAI: Could not send contrast results.", err);
+            });
     }
-};
 
-document.addEventListener("DOMContentLoaded", function () {
-    if (window.location.search.includes("accessai_scan=1")) {
-        window.AccessAIContrastScanner.scan();
+    /* -------- token-based auto-trigger -------- */
+    function runIfTokenPresent() {
+        var tokenMeta = document.querySelector('meta[name="accessai-scan-token"]');
+        var ajaxUrlMeta = document.querySelector('meta[name="accessai-ajax-url"]');
+
+        if (!tokenMeta || !ajaxUrlMeta) return; // Not a scan request.
+
+        var token = tokenMeta.getAttribute("content") || "";
+        var ajaxUrl = ajaxUrlMeta.getAttribute("content") || "";
+
+        if (!token || !ajaxUrl) return;
+
+        console.log("AccessAI: Scan token detected. Verifying…");
+
+        // Step 1: verify the token server-side to get the result nonce.
+        var verifyBody = new URLSearchParams({ action: "accessai_verify_scan_token", token: token });
+        fetch(ajaxUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: verifyBody.toString()
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (resp) {
+                if (!resp.success) {
+                    console.warn("AccessAI: Token verification failed.", resp);
+                    return;
+                }
+                var resultNonce = resp.data.resultNonce;
+                var resultAjax = resp.data.ajaxUrl;
+
+                console.log("AccessAI: Token verified. Running contrast scan…");
+                var issues = scanContrast();
+                return sendResults(resultAjax, resultNonce, issues);
+            })
+            .catch(function (err) {
+                console.error("AccessAI: Token verification error.", err);
+            });
     }
-});
+
+    /* -------- public API (kept for manual console use) -------- */
+    window.AccessAIContrastScanner = {
+        scan: function (ajaxUrl, nonce) {
+            var issues = scanContrast();
+            if (ajaxUrl && nonce) sendResults(ajaxUrl, nonce, issues);
+            return issues;
+        }
+    };
+
+    document.addEventListener("DOMContentLoaded", runIfTokenPresent);
 
 })();
