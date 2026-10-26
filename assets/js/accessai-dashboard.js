@@ -604,7 +604,7 @@
             wrapper.style.position = "absolute";
             wrapper.style.left = "0";
             wrapper.style.top = "0";
-            wrapper.style.width = "800px";
+            wrapper.style.width = "680px";
             wrapper.style.height = "1px";
             wrapper.style.overflow = "hidden";
             wrapper.style.zIndex = "-9999";
@@ -613,75 +613,75 @@
 
             var container = document.createElement("div");
             container.id = "accessai-pdf-render-box";
-            container.style.width = "780px";
+            container.style.width = "680px";
             container.style.margin = "0 auto";
             container.style.background = "#ffffff";
             container.style.color = "#1e293b";
             container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
             container.style.fontSize = "11px";
             container.style.lineHeight = "1.45";
-            container.style.padding = "24px";
+            container.style.padding = "18px 20px";
             container.style.boxSizing = "border-box";
 
             var html = "";
 
             /* 1. Header Banner */
-            html += '<div style="background-color: #0f172a; border-radius: 12px; padding: 22px 26px; color: #ffffff; margin-bottom: 20px;">';
-            html += '  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">';
+            html += '<div style="background-color: #0f172a; border-radius: 12px; padding: 18px 20px; color: #ffffff; margin-bottom: 18px; box-sizing: border-box;">';
+            html += '  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">';
             html += '    <div>';
             html += '      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">';
             html += '        <span style="background: #4f46e5; color: #ffffff; font-weight: 800; font-size: 13px; padding: 3px 8px; border-radius: 6px; letter-spacing: 0.5px;">AccessAI</span>';
             html += '        <span style="font-size: 10px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Accessibility Audit Report</span>';
             html += '      </div>';
-            html += '      <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em;">WCAG 2.1 Compliance Assessment</h1>';
+            html += '      <h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em;">WCAG 2.1 Compliance Assessment</h1>';
             html += '    </div>';
             html += '    <div style="text-align: right;">';
-            html += '      <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 6px 14px; display: inline-block;">';
+            html += '      <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 5px 10px; display: inline-block;">';
             html += '        <div style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Generated</div>';
-            html += '        <div style="font-size: 11px; font-weight: 600; color: #ffffff;">' + esc(dateStr) + ' &bull; ' + esc(timeStr) + '</div>';
+            html += '        <div style="font-size: 10.5px; font-weight: 600; color: #ffffff;">' + esc(dateStr) + ' &bull; ' + esc(timeStr) + '</div>';
             html += '      </div>';
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div style="display: flex; gap: 14px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; font-size: 11px;">';
+            html += '  <div style="display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; font-size: 10.5px;">';
             html += '    <div style="flex: 2;">';
-            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Audited Target</span>';
-            html += '      <strong style="color: #ffffff; font-size: 13px;">' + esc(pageTitle) + '</strong>';
-            html += '      <span style="color: #cbd5e1; display: block; font-size: 10px; word-break: break-all;">' + esc(pageUrl) + '</span>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.05em;">Audited Target</span>';
+            html += '      <strong style="color: #ffffff; font-size: 12px;">' + esc(pageTitle) + '</strong>';
+            html += '      <span style="color: #cbd5e1; display: block; font-size: 9.5px; word-break: break-all;">' + esc(pageUrl) + '</span>';
             html += '    </div>';
             html += '    <div style="flex: 1;">';
-            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Compliance Standard</span>';
-            html += '      <strong style="color: #ffffff; font-size: 12px;">WCAG 2.1 Level AA</strong>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.05em;">Compliance Standard</span>';
+            html += '      <strong style="color: #ffffff; font-size: 11.5px;">WCAG 2.1 Level AA</strong>';
             html += '    </div>';
             html += '    <div style="flex: 1;">';
-            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Audit Engine</span>';
-            html += '      <strong style="color: #ffffff; font-size: 12px;">AccessAI Engine v1.2</strong>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.05em;">Audit Engine</span>';
+            html += '      <strong style="color: #ffffff; font-size: 11.5px;">AccessAI Engine v1.2</strong>';
             html += '    </div>';
             html += '  </div>';
             html += '</div>';
 
             /* 2. Executive Scorecard & Metrics */
-            html += '<div style="display: flex; gap: 12px; margin-bottom: 22px; page-break-inside: avoid; break-inside: avoid;">';
-            html += '  <div style="flex: 1.3; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; display: flex; align-items: center; gap: 16px;">';
-            html += '    <div style="width: 64px; height: 64px; border-radius: 50%; background: ' + scoreBg + '; color: ' + scoreColor + '; border: 3px solid ' + scoreBorder + '; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">';
-            html += '      <span style="font-size: 22px; line-height: 1;">' + esc(score) + '</span>';
+            html += '<div style="display: flex; gap: 10px; margin-bottom: 18px; page-break-inside: avoid; break-inside: avoid;">';
+            html += '  <div style="flex: 1.25; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-sizing: border-box;">';
+            html += '    <div style="width: 52px; height: 52px; border-radius: 50%; background: ' + scoreBg + '; color: ' + scoreColor + '; border: 3px solid ' + scoreBorder + '; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">';
+            html += '      <span style="font-size: 19px; line-height: 1;">' + esc(score) + '</span>';
             html += '      <span style="font-size: 8px; opacity: 0.85;">/100</span>';
             html += '    </div>';
             html += '    <div>';
-            html += '      <div style="font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Accessibility Score</div>';
-            html += '      <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin: 2px 0;">' + esc(scoreLabel) + '</div>';
-            html += '      <div style="font-size: 10px; color: #64748b;">' + esc(passedChecks) + ' of ' + esc(totalChecks) + ' Criteria Passing</div>';
+            html += '      <div style="font-size: 8.5px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Accessibility Score</div>';
+            html += '      <div style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 1px 0;">' + esc(scoreLabel) + '</div>';
+            html += '      <div style="font-size: 9.5px; color: #64748b;">' + esc(passedChecks) + ' of ' + esc(totalChecks) + ' Criteria Passing</div>';
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px;">';
-            html += '    <div style="font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Total Violations</div>';
-            html += '    <div style="font-size: 24px; font-weight: 800; color: ' + (parseInt(totalIssues, 10) > 0 ? '#dc2626' : '#059669') + '; margin: 2px 0;">' + esc(totalIssues) + '</div>';
-            html += '    <div style="font-size: 10px; color: #64748b;">Actionable items detected</div>';
+            html += '  <div style="flex: 0.95; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; box-sizing: border-box;">';
+            html += '    <div style="font-size: 8.5px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Total Violations</div>';
+            html += '    <div style="font-size: 22px; font-weight: 800; color: ' + (parseInt(totalIssues, 10) > 0 ? '#dc2626' : '#059669') + '; margin: 1px 0;">' + esc(totalIssues) + '</div>';
+            html += '    <div style="font-size: 9.5px; color: #64748b;">Actionable items detected</div>';
             html += '  </div>';
 
-            html += '  <div style="flex: 1.2; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; font-size: 10px;">';
-            html += '    <div style="font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 6px;">Findings Breakdown</div>';
+            html += '  <div style="flex: 1.15; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; font-size: 9.5px; box-sizing: border-box;">';
+            html += '    <div style="font-size: 8.5px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 4px;">Findings Breakdown</div>';
             html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Image Alt Text:</span> <strong style="color: ' + (altIssues.length ? '#dc2626' : '#059669') + ';">' + altIssues.length + '</strong></div>';
             html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Heading Hierarchy:</span> <strong style="color: ' + (headingIssues.length ? '#dc2626' : '#059669') + ';">' + headingIssues.length + '</strong></div>';
             html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Form Labels:</span> <strong style="color: ' + (formIssues.length ? '#dc2626' : '#059669') + ';">' + formIssues.length + '</strong></div>';
@@ -691,22 +691,22 @@
 
             /* Helper function for category sections */
             function renderSectionHeader(title, wcag, count, isPassText) {
-                var s = '<div style="display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #4f46e5; padding-left: 10px; margin: 18px 0 10px;">';
+                var s = '<div style="display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #4f46e5; padding-left: 10px; margin: 16px 0 8px; box-sizing: border-box;">';
                 s += '  <div>';
-                s += '    <h3 style="margin: 0; font-size: 13px; font-weight: 700; color: #0f172a;">' + esc(title) + '</h3>';
-                s += '    <div style="font-size: 9px; color: #64748b;">' + esc(wcag) + '</div>';
+                s += '    <h3 style="margin: 0; font-size: 12.5px; font-weight: 700; color: #0f172a;">' + esc(title) + '</h3>';
+                s += '    <div style="font-size: 8.5px; color: #64748b;">' + esc(wcag) + '</div>';
                 s += '  </div>';
                 if (count === 0) {
-                    s += '  <span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 10px; font-size: 9.5px; font-weight: 700;">' + esc(isPassText || '✓ All Clear') + '</span>';
+                    s += '  <span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 8px; font-size: 9px; font-weight: 700; white-space: nowrap;">' + esc(isPassText || '✓ All Clear') + '</span>';
                 } else {
-                    s += '  <span style="background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 10px; font-size: 9.5px; font-weight: 700;">' + count + ' Issues Found</span>';
+                    s += '  <span style="background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 8px; font-size: 9px; font-weight: 700; white-space: nowrap;">' + count + ' ' + (count === 1 ? 'Issue' : 'Issues') + ' Found</span>';
                 }
                 s += '</div>';
                 return s;
             }
 
             function renderEmptyNotice(msg) {
-                return '<div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; color: #166534; font-size: 10px; margin-bottom: 14px;"><strong>✓ Passed:</strong> ' + esc(msg) + '</div>';
+                return '<div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; color: #166534; font-size: 9.5px; margin-bottom: 12px; box-sizing: border-box;"><strong>✓ Passed:</strong> ' + esc(msg) + '</div>';
             }
 
             /* Section 1: Image Alt Text */
@@ -715,20 +715,20 @@
             if (altIssues.length === 0) {
                 html += renderEmptyNotice("All images examined in this page contain descriptive alternative text for screen readers.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 10%;">Severity</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 32%;">Image Resource</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 10%;">Severity</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 32%;">Image Resource</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 altIssues.forEach(function (issue, idx) {
                     var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
                     html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 7px 9px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
-                    html += '    <td style="padding: 7px 9px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8.5px;">' + esc(issue.severity) + '</span></td>';
-                    html += '    <td style="padding: 7px 9px; font-family: monospace; font-size: 8.5px; word-break: break-all; color: #334155;">' + esc(issue.src) + '</td>';
-                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '    <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 6px 8px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8px; white-space: nowrap;">' + esc(issue.severity) + '</span></td>';
+                    html += '    <td style="padding: 6px 8px; font-family: monospace; font-size: 8px; word-break: break-all; color: #334155;">' + esc(issue.src) + '</td>';
+                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -741,20 +741,20 @@
             if (headingIssues.length === 0) {
                 html += renderEmptyNotice("Headings follow a strict logical progression without any skipped heading levels.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 14%;">Sequence</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 28%;">Heading Text</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 14%;">Sequence</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 28%;">Heading Text</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 headingIssues.forEach(function (issue, idx) {
                     var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
                     html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 7px 9px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
-                    html += '    <td style="padding: 7px 9px;"><span style="background: #fef3c7; color: #92400e; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8.5px;">' + esc(issue.transition) + '</span></td>';
-                    html += '    <td style="padding: 7px 9px; font-style: italic; color: #334155;">' + esc(issue.text) + '</td>';
-                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '    <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 6px 8px;"><span style="background: #fef3c7; color: #92400e; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8px; white-space: nowrap;">' + esc(issue.transition) + '</span></td>';
+                    html += '    <td style="padding: 6px 8px; font-style: italic; color: #334155; word-break: break-word;">' + esc(issue.text) + '</td>';
+                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -767,20 +767,20 @@
             if (formIssues.length === 0) {
                 html += renderEmptyNotice("All interactive form inputs, selects, and textareas have accessible names and labels.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 20%;">Issue</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 16%;">Control Type</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 24%;">Field Identifier</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 16%;">Control Type</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 26%;">Field Identifier</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 formIssues.forEach(function (issue, idx) {
                     var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
                     html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 7px 9px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
-                    html += '    <td style="padding: 7px 9px;"><span style="background: #f1f5f9; color: #475569; padding: 2px 5px; border-radius: 4px; font-weight: 600; font-size: 8.5px;">' + esc(issue.control) + '</span></td>';
-                    html += '    <td style="padding: 7px 9px; font-family: monospace; font-size: 8.5px; color: #334155;">' + esc(issue.field) + '</td>';
-                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '    <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 6px 8px;"><span style="background: #f1f5f9; color: #475569; padding: 2px 5px; border-radius: 4px; font-weight: 600; font-size: 8px; white-space: nowrap;">' + esc(issue.control) + '</span></td>';
+                    html += '    <td style="padding: 6px 8px; font-family: monospace; font-size: 8px; color: #334155; word-break: break-word;">' + esc(issue.field) + '</td>';
+                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -793,20 +793,20 @@
             if (contrastIssues.length === 0) {
                 html += renderEmptyNotice("No color contrast violations detected. Tested text elements satisfy WCAG AA minimum 4.5:1 ratio.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 22%;">Element Selector</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 22%;">Text Preview</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 16%;">Measured vs Min</th>';
-                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 22%;">Element Selector</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 22%;">Text Preview</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 16%;">Measured vs Min</th>';
+                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 contrastIssues.forEach(function (issue, idx) {
                     var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
                     html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 7px 9px; font-family: monospace; font-size: 8.5px; color: #0f172a; word-break: break-all;">' + esc(issue.element) + '</td>';
-                    html += '    <td style="padding: 7px 9px; font-style: italic; color: #334155;">' + esc(issue.sample) + '</td>';
-                    html += '    <td style="padding: 7px 9px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8.5px;">' + esc(issue.ratio) + '</span> <span style="color: #64748b; font-size: 8.5px;">(need ' + esc(issue.required) + ')</span></td>';
-                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '    <td style="padding: 6px 8px; font-family: monospace; font-size: 8px; color: #0f172a; word-break: break-all;">' + esc(issue.element) + '</td>';
+                    html += '    <td style="padding: 6px 8px; font-style: italic; color: #334155; word-break: break-word;">' + esc(issue.sample) + '</td>';
+                    html += '    <td style="padding: 6px 8px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8px; white-space: nowrap;">' + esc(issue.ratio) + '</span> <span style="color: #64748b; font-size: 8px; white-space: nowrap;">(need ' + esc(issue.required) + ')</span></td>';
+                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -814,9 +814,9 @@
             html += '</div>';
 
             /* 5. Remediation Roadmap Box */
-            html += '<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-top: 20px; page-break-inside: avoid; break-inside: avoid;">';
-            html += '  <h4 style="margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em;">Recommended Remediation Priority</h4>';
-            html += '  <ul style="margin: 0; padding-left: 18px; font-size: 10px; color: #475569; line-height: 1.5;">';
+            html += '<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-top: 16px; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box;">';
+            html += '  <h4 style="margin: 0 0 5px; font-size: 10.5px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em;">Recommended Remediation Priority</h4>';
+            html += '  <ul style="margin: 0; padding-left: 16px; font-size: 9.5px; color: #475569; line-height: 1.45;">';
             html += '    <li><strong>Priority 1 (Critical):</strong> Populate missing alt text on all active link images and informational graphics.</li>';
             html += '    <li><strong>Priority 2 (High):</strong> Ensure every interactive form field has a distinct, programmatic label for assistive technologies.</li>';
             html += '    <li><strong>Priority 3 (Medium):</strong> Adjust CSS color values on flagged low-contrast elements to achieve the 4.5:1 ratio requirement.</li>';
@@ -825,7 +825,7 @@
             html += '</div>';
 
             /* 6. Document Footer */
-            html += '<div style="border-top: 1px solid #e2e8f0; margin-top: 20px; padding-top: 12px; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; page-break-inside: avoid; break-inside: avoid;">';
+            html += '<div style="border-top: 1px solid #e2e8f0; margin-top: 16px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8.5px; color: #94a3b8; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box;">';
             html += '  <span>AccessAI Automated WCAG Compliance Engine &bull; WordPress Accessibility Suite</span>';
             html += '  <span>Confidential &bull; Page 1 of Audit Report</span>';
             html += '</div>';
@@ -854,21 +854,14 @@
                     scrollX: 0,
                     scrollY: 0,
                     onclone: function (clonedDoc) {
-                        var clonedWrapper = clonedDoc.getElementById("accessai-pdf-wrapper");
-                        if (clonedWrapper) {
-                            clonedWrapper.style.position = "static";
-                            clonedWrapper.style.height = "auto";
-                            clonedWrapper.style.overflow = "visible";
-                            clonedWrapper.style.zIndex = "auto";
-                            clonedWrapper.style.opacity = "1";
-                        }
                         var clonedBox = clonedDoc.getElementById("accessai-pdf-render-box");
                         if (clonedBox) {
                             clonedBox.style.position = "static";
                             clonedBox.style.height = "auto";
                             clonedBox.style.opacity = "1";
                             clonedBox.style.display = "block";
-                            clonedBox.style.width = "780px";
+                            clonedBox.style.width = "680px";
+                            clonedBox.style.boxSizing = "border-box";
                         }
                         var overlays = clonedDoc.querySelectorAll(".html2pdf__overlay");
                         overlays.forEach(function (o) {
@@ -880,8 +873,6 @@
                         containers.forEach(function (c) {
                             c.style.opacity = "1";
                             c.style.visibility = "visible";
-                            c.style.position = "static";
-                            c.style.display = "block";
                         });
                     }
                 },

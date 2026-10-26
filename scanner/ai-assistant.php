@@ -682,7 +682,7 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/accessai-dashboard.js',
 		array( 'jquery', 'html2pdf-js' ),
-		'1.2.6',
+		'1.2.9',
 		true
 	);
 
