@@ -598,17 +598,26 @@
                 '</div>';
             document.body.appendChild(overlay);
 
-            // Container placed at (0, 0) in the viewport under the modal overlay
+            // Offscreen wrapper with opacity 1 so html2canvas renders, but clipped out of user view
+            var wrapper = document.createElement("div");
+            wrapper.id = "accessai-pdf-wrapper";
+            wrapper.style.position = "absolute";
+            wrapper.style.left = "0";
+            wrapper.style.top = "0";
+            wrapper.style.width = "800px";
+            wrapper.style.height = "1px";
+            wrapper.style.overflow = "hidden";
+            wrapper.style.zIndex = "-9999";
+            wrapper.style.opacity = "1";
+            wrapper.style.pointerEvents = "none";
+
             var container = document.createElement("div");
             container.id = "accessai-pdf-render-box";
-            container.style.position = "fixed";
-            container.style.left = "0";
-            container.style.top = "0";
             container.style.width = "780px";
-            container.style.zIndex = "99999";
+            container.style.margin = "0 auto";
             container.style.background = "#ffffff";
             container.style.color = "#1e293b";
-            container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+            container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
             container.style.fontSize = "11px";
             container.style.lineHeight = "1.45";
             container.style.padding = "24px";
@@ -617,7 +626,7 @@
             var html = "";
 
             /* 1. Header Banner */
-            html += '<div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); border-radius: 12px; padding: 22px 26px; color: #ffffff; margin-bottom: 20px;">';
+            html += '<div style="background-color: #0f172a; border-radius: 12px; padding: 22px 26px; color: #ffffff; margin-bottom: 20px;">';
             html += '  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">';
             html += '    <div>';
             html += '      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">';
@@ -634,17 +643,17 @@
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; font-size: 11px;">';
-            html += '    <div>';
+            html += '  <div style="display: flex; gap: 14px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; font-size: 11px;">';
+            html += '    <div style="flex: 2;">';
             html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Audited Target</span>';
             html += '      <strong style="color: #ffffff; font-size: 13px;">' + esc(pageTitle) + '</strong>';
             html += '      <span style="color: #cbd5e1; display: block; font-size: 10px; word-break: break-all;">' + esc(pageUrl) + '</span>';
             html += '    </div>';
-            html += '    <div>';
+            html += '    <div style="flex: 1;">';
             html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Compliance Standard</span>';
             html += '      <strong style="color: #ffffff; font-size: 12px;">WCAG 2.1 Level AA</strong>';
             html += '    </div>';
-            html += '    <div>';
+            html += '    <div style="flex: 1;">';
             html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Audit Engine</span>';
             html += '      <strong style="color: #ffffff; font-size: 12px;">AccessAI Engine v1.2</strong>';
             html += '    </div>';
@@ -822,10 +831,11 @@
             html += '</div>';
 
             container.innerHTML = html;
-            document.body.appendChild(container);
+            wrapper.appendChild(container);
+            document.body.appendChild(wrapper);
 
             function cleanup() {
-                if (container && container.parentNode) container.parentNode.removeChild(container);
+                if (wrapper && wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
                 if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
@@ -840,8 +850,40 @@
                     useCORS: true,
                     letterRendering: true,
                     logging: false,
+                    backgroundColor: "#ffffff",
                     scrollX: 0,
-                    scrollY: 0
+                    scrollY: 0,
+                    onclone: function (clonedDoc) {
+                        var clonedWrapper = clonedDoc.getElementById("accessai-pdf-wrapper");
+                        if (clonedWrapper) {
+                            clonedWrapper.style.position = "static";
+                            clonedWrapper.style.height = "auto";
+                            clonedWrapper.style.overflow = "visible";
+                            clonedWrapper.style.zIndex = "auto";
+                            clonedWrapper.style.opacity = "1";
+                        }
+                        var clonedBox = clonedDoc.getElementById("accessai-pdf-render-box");
+                        if (clonedBox) {
+                            clonedBox.style.position = "static";
+                            clonedBox.style.height = "auto";
+                            clonedBox.style.opacity = "1";
+                            clonedBox.style.display = "block";
+                            clonedBox.style.width = "780px";
+                        }
+                        var overlays = clonedDoc.querySelectorAll(".html2pdf__overlay");
+                        overlays.forEach(function (o) {
+                            o.style.opacity = "1";
+                            o.style.visibility = "visible";
+                            o.style.backgroundColor = "#ffffff";
+                        });
+                        var containers = clonedDoc.querySelectorAll(".html2pdf__container");
+                        containers.forEach(function (c) {
+                            c.style.opacity = "1";
+                            c.style.visibility = "visible";
+                            c.style.position = "static";
+                            c.style.display = "block";
+                        });
+                    }
                 },
                 jsPDF: {
                     unit: "mm",
@@ -853,21 +895,23 @@
                 }
             };
 
-            window.html2pdf().set(opt).from(container).save().then(function () {
-                cleanup();
-                var statusEl = document.getElementById("accessai-scan-status");
-                if (statusEl) {
-                    statusEl.className = "accessai-scan-status is-ok";
-                    statusEl.textContent = "✓ PDF accessibility report downloaded successfully!";
-                    setTimeout(function () {
-                        statusEl.className = "accessai-scan-status";
-                        statusEl.textContent = "";
-                    }, 5000);
-                }
-            }).catch(function (err) {
-                cleanup();
-                alert("Could not generate PDF: " + (err.message || "Unknown error."));
-            });
+            setTimeout(function () {
+                window.html2pdf().set(opt).from(container).save().then(function () {
+                    cleanup();
+                    var statusEl = document.getElementById("accessai-scan-status");
+                    if (statusEl) {
+                        statusEl.className = "accessai-scan-status is-ok";
+                        statusEl.textContent = "✓ PDF accessibility report downloaded successfully!";
+                        setTimeout(function () {
+                            statusEl.className = "accessai-scan-status";
+                            statusEl.textContent = "";
+                        }, 5000);
+                    }
+                }).catch(function (err) {
+                    cleanup();
+                    alert("Could not generate PDF: " + (err.message || "Unknown error."));
+                });
+            }, 100);
         });
     }
 

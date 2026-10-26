@@ -667,14 +667,14 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-css',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/css/accessai-dashboard.css',
 		array( 'dashicons' ),
-		'1.2.5'
+		'1.2.6'
 	);
 
 	wp_enqueue_script(
 		'html2pdf-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/html2pdf.bundle.min.js',
 		array(),
-		'0.10.1',
+		'0.10.2',
 		true
 	);
 
@@ -682,7 +682,7 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/accessai-dashboard.js',
 		array( 'jquery', 'html2pdf-js' ),
-		'1.2.5',
+		'1.2.6',
 		true
 	);
 
