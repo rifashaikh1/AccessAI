@@ -242,12 +242,12 @@ function accessai_render_dashboard() {
 							<?php endforeach; ?>
 						</select>
 					</div>
-					<button id="accessai-scan-btn" type="button" class="button button-primary accessai-scan-btn">
+					<button id="accessai-scan-btn" type="button" class="accessai-scan-btn">
 						<span class="dashicons dashicons-update"></span>
 						<span>Scan Page</span>
 					</button>
 					<?php if ( $active_page_id ) : ?>
-						<button id="accessai-clear-contrast-btn" type="button" class="button button-secondary accessai-clear-btn">
+						<button id="accessai-clear-contrast-btn" type="button" class="accessai-clear-btn">
 							<span class="dashicons dashicons-trash"></span>
 							<span>Clear Results</span>
 						</button>

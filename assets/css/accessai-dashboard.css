@@ -89,21 +89,52 @@
 }
 
 /* Ensure WordPress Dashicons icon font is preserved and never overridden */
-.accessai-wrap .dashicons,
-.accessai-wrap .dashicons:before,
-.accessai-wrap .dashicons::before {
+.accessai-wrap .dashicons {
     font-family: dashicons !important;
-    display: inline-block;
-    line-height: 1;
-    font-weight: 400;
-    font-style: normal;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    vertical-align: middle !important;
+    line-height: 1 !important;
     speak: never;
+    font-weight: 400 !important;
+    font-style: normal !important;
     text-decoration: inherit;
     text-transform: none;
     text-rendering: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    vertical-align: middle;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.accessai-wrap .dashicons:before,
+.accessai-wrap .dashicons::before {
+    font-family: dashicons !important;
+    display: inline-block !important;
+    line-height: 1 !important;
+    width: 1em !important;
+    height: 1em !important;
+    font-size: inherit !important;
+    vertical-align: middle !important;
+    text-align: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Force override of WordPress .wp-core-ui button dashicons line-height: 1.9 */
+.wp-core-ui .accessai-wrap .button .dashicons,
+.wp-core-ui .accessai-wrap .button-primary .dashicons,
+.wp-core-ui .accessai-wrap .button-secondary .dashicons,
+.wp-core-ui .accessai-wrap .dashicons,
+.accessai-wrap .button .dashicons,
+.accessai-wrap .button-primary .dashicons,
+.accessai-wrap .button-secondary .dashicons {
+    line-height: 1 !important;
+    vertical-align: middle !important;
+    margin: 0 !important;
 }
 
 /* ==========================================================================
@@ -345,13 +376,19 @@
 
 .accessai-select-icon {
     position: absolute;
-    left: 12px;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     color: var(--accessai-slate-400);
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
+    font-size: 18px !important;
+    width: 18px !important;
+    height: 18px !important;
+    line-height: 1 !important;
     pointer-events: none;
-    z-index: 1;
+    z-index: 2;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 .accessai-page-select {
@@ -381,13 +418,16 @@
     outline: none !important;
 }
 
-.accessai-scan-btn {
+.wp-core-ui .accessai-wrap .accessai-scan-btn,
+.accessai-wrap .accessai-scan-btn {
     height: 42px !important;
+    min-height: 42px !important;
     padding: 0 22px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 8px !important;
+    line-height: 1 !important;
     background: var(--accessai-gradient-primary) !important;
     border: none !important;
     border-radius: var(--accessai-radius-md) !important;
@@ -397,6 +437,16 @@
     cursor: pointer !important;
     box-shadow: 0 4px 12px -2px rgba(79, 70, 229, 0.35) !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    white-space: nowrap !important;
+    text-shadow: none !important;
+    vertical-align: middle !important;
+}
+
+.wp-core-ui .accessai-wrap .accessai-scan-btn span,
+.accessai-wrap .accessai-scan-btn span {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
 }
 
 .accessai-scan-btn:hover:not(:disabled) {
@@ -414,20 +464,26 @@
     cursor: not-allowed !important;
 }
 
-.accessai-scan-btn .dashicons {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-    line-height: 18px;
+.wp-core-ui .accessai-wrap .accessai-scan-btn .dashicons,
+.accessai-wrap .accessai-scan-btn .dashicons {
+    font-size: 18px !important;
+    width: 18px !important;
+    height: 18px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    vertical-align: middle !important;
 }
 
-.accessai-clear-btn {
+.wp-core-ui .accessai-wrap .accessai-clear-btn,
+.accessai-wrap .accessai-clear-btn {
     height: 42px !important;
+    min-height: 42px !important;
     padding: 0 16px !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 6px !important;
+    line-height: 1 !important;
     background: #ffffff !important;
     border: 1px solid var(--accessai-slate-200) !important;
     border-radius: var(--accessai-radius-md) !important;
@@ -436,6 +492,16 @@
     font-weight: 600 !important;
     cursor: pointer !important;
     transition: all 0.15s ease !important;
+    white-space: nowrap !important;
+    text-shadow: none !important;
+    vertical-align: middle !important;
+}
+
+.wp-core-ui .accessai-wrap .accessai-clear-btn span,
+.accessai-wrap .accessai-clear-btn span {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
 }
 
 .accessai-clear-btn:hover:not(:disabled) {
@@ -444,10 +510,13 @@
     border-color: var(--accessai-rose-border) !important;
 }
 
-.accessai-clear-btn .dashicons {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
+.wp-core-ui .accessai-wrap .accessai-clear-btn .dashicons,
+.accessai-wrap .accessai-clear-btn .dashicons {
+    font-size: 16px !important;
+    width: 16px !important;
+    height: 16px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
 }
 
 /* Scan status notification */

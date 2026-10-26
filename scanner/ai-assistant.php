@@ -667,14 +667,14 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-css',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/css/accessai-dashboard.css',
 		array( 'dashicons' ),
-		'1.2.2'
+		'1.2.3'
 	);
 
 	wp_enqueue_script(
 		'accessai-dashboard-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/accessai-dashboard.js',
 		array( 'jquery' ),
-		'1.2.2',
+		'1.2.3',
 		true
 	);
 
