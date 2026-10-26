@@ -79,7 +79,31 @@
 .accessai-wrap *::before,
 .accessai-wrap *::after {
     box-sizing: border-box;
+}
+
+.accessai-wrap input,
+.accessai-wrap button,
+.accessai-wrap select,
+.accessai-wrap textarea {
     font-family: inherit;
+}
+
+/* Ensure WordPress Dashicons icon font is preserved and never overridden */
+.accessai-wrap .dashicons,
+.accessai-wrap .dashicons:before,
+.accessai-wrap .dashicons::before {
+    font-family: dashicons !important;
+    display: inline-block;
+    line-height: 1;
+    font-weight: 400;
+    font-style: normal;
+    speak: never;
+    text-decoration: inherit;
+    text-transform: none;
+    text-rendering: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    vertical-align: middle;
 }
 
 /* ==========================================================================

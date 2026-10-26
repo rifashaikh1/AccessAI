@@ -661,18 +661,20 @@ function accessai_ai_admin_assets( $hook ) {
 		return;
 	}
 
+	wp_enqueue_style( 'dashicons' );
+
 	wp_enqueue_style(
 		'accessai-dashboard-css',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/css/accessai-dashboard.css',
-		array(),
-		'1.2.1'
+		array( 'dashicons' ),
+		'1.2.2'
 	);
 
 	wp_enqueue_script(
 		'accessai-dashboard-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/accessai-dashboard.js',
-		array(),
-		'1.2.1',
+		array( 'jquery' ),
+		'1.2.2',
 		true
 	);
 
