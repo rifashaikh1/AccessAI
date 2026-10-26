@@ -251,6 +251,20 @@ function accessai_render_dashboard() {
 							<span class="dashicons dashicons-trash"></span>
 							<span>Clear Results</span>
 						</button>
+						<button id="accessai-download-pdf-btn" type="button" class="accessai-pdf-btn"
+								data-page-id="<?php echo esc_attr( $active_page_id ); ?>"
+								data-page-title="<?php echo esc_attr( $scanned_post ? $scanned_post->post_title : 'Page' ); ?>"
+								data-page-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+								data-score="<?php echo esc_attr( $score !== null ? $score : '' ); ?>"
+								data-score-label="<?php echo esc_attr( $score_label ); ?>"
+								data-score-class="<?php echo esc_attr( $score_class ); ?>"
+								data-total-issues="<?php echo esc_attr( $total_issues ); ?>"
+								data-passed-checks="<?php echo esc_attr( $passed_checks ); ?>"
+								data-total-checks="<?php echo esc_attr( $checks_estimated ); ?>"
+								title="Download detailed, professional WCAG accessibility audit PDF">
+							<span class="dashicons dashicons-pdf"></span>
+							<span>Download Report</span>
+						</button>
 					<?php endif; ?>
 				</div>
 

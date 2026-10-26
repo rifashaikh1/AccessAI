@@ -452,11 +452,407 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* PDF Report Export Engine                                            */
+    /* ------------------------------------------------------------------ */
+    function initPdfReportExport() {
+        var btn = document.getElementById("accessai-download-pdf-btn");
+        if (!btn) return;
+
+        function cleanText(el) {
+            if (!el) return "";
+            return (el.textContent || "").trim().replace(/\s+/g, " ");
+        }
+
+        function getAiText(row) {
+            if (!row) return "";
+            var cell = row.querySelector(".accessai-ai-cell");
+            if (!cell) return "";
+            var body = cell.querySelector(".accessai-ai-body");
+            if (body) {
+                var txt = cleanText(body);
+                var fixEl = cell.querySelector(".accessai-ai-fix strong, .accessai-ai-fix em");
+                if (fixEl) txt += " — Suggested fix: " + cleanText(fixEl);
+                return txt;
+            }
+            if (cell.querySelector(".accessai-spinner") || cell.querySelector(".accessai-ai-na")) {
+                return "";
+            }
+            return cleanText(cell);
+        }
+
+        btn.addEventListener("click", function () {
+            if (typeof window.html2pdf !== "function") {
+                alert("PDF export engine is initializing. Please try again in a moment.");
+                return;
+            }
+
+            var originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="dashicons dashicons-update accessai-spin"></span><span>Generating PDF…</span>';
+
+            var pageTitle = btn.dataset.pageTitle || "Audited Page";
+            var pageUrl = btn.dataset.pageUrl || window.location.href;
+            var score = btn.dataset.score || "—";
+            var scoreLabel = btn.dataset.scoreLabel || "Evaluation Complete";
+            var totalIssues = btn.dataset.totalIssues || "0";
+            var passedChecks = btn.dataset.passedChecks || "0";
+            var totalChecks = btn.dataset.totalChecks || "4";
+
+            var now = new Date();
+            var dateStr = now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+            var timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+            var pageSlug = pageTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "report";
+
+            // Determine score theme colors
+            var numScore = parseInt(score, 10);
+            var scoreBg = "#ecfdf5", scoreColor = "#059669", scoreBorder = "#10b981", badgeBg = "#d1fae5", badgeColor = "#065f46";
+            if (isNaN(numScore) || numScore < 50) {
+                scoreBg = "#fef2f2"; scoreColor = "#dc2626"; scoreBorder = "#ef4444"; badgeBg = "#fee2e2"; badgeColor = "#991b1b";
+            } else if (numScore < 70) {
+                scoreBg = "#fffbeb"; scoreColor = "#d97706"; scoreBorder = "#f59e0b"; badgeBg = "#fef3c7"; badgeColor = "#92400e";
+            } else if (numScore < 85) {
+                scoreBg = "#eff6ff"; scoreColor = "#2563eb"; scoreBorder = "#3b82f6"; badgeBg = "#dbeafe"; badgeColor = "#1e40af";
+            }
+
+            // Gather Alt Text findings
+            var altRows = document.querySelectorAll("#accessai-alt-table tbody tr");
+            var altIssues = [];
+            altRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    altIssues.push({
+                        type: cleanText(cols[0]),
+                        severity: cleanText(cols[1]),
+                        page: cleanText(cols[2]),
+                        src: cleanText(cols[3]),
+                        ai: getAiText(r) || "Add an informative, contextual alt attribute describing the image content or purpose."
+                    });
+                }
+            });
+
+            // Gather Heading findings
+            var headingRows = document.querySelectorAll("#accessai-heading-table tbody tr");
+            var headingIssues = [];
+            headingRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    headingIssues.push({
+                        type: cleanText(cols[0]),
+                        page: cleanText(cols[1]),
+                        transition: cleanText(cols[2]),
+                        text: cleanText(cols[3]),
+                        ai: getAiText(r) || "Structure headings hierarchically (e.g., H1 followed by H2, then H3) without skipping levels."
+                    });
+                }
+            });
+
+            // Gather Form Label findings
+            var formRows = document.querySelectorAll("#accessai-form-table tbody tr");
+            var formIssues = [];
+            formRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    formIssues.push({
+                        type: cleanText(cols[0]),
+                        page: cleanText(cols[1]),
+                        control: cleanText(cols[2]),
+                        field: cleanText(cols[3]),
+                        ai: getAiText(r) || "Associate a descriptive <label for='...'> or aria-label attribute with this form control."
+                    });
+                }
+            });
+
+            // Gather Color Contrast findings
+            var contrastRows = document.querySelectorAll("#accessai-contrast-table tbody tr");
+            var contrastIssues = [];
+            contrastRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    contrastIssues.push({
+                        element: cleanText(cols[0]),
+                        sample: cleanText(cols[1]),
+                        ratio: cleanText(cols[2]),
+                        required: cleanText(cols[3]),
+                        ai: getAiText(r) || "Increase luminance contrast between foreground text and background to at least 4.5:1."
+                    });
+                }
+            });
+
+            // Build offscreen printable HTML document
+            var container = document.createElement("div");
+            container.id = "accessai-pdf-render-box";
+            container.style.position = "absolute";
+            container.style.left = "-9999px";
+            container.style.top = "0";
+            container.style.width = "780px";
+            container.style.background = "#ffffff";
+            container.style.color = "#1e293b";
+            container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+            container.style.fontSize = "11px";
+            container.style.lineHeight = "1.45";
+            container.style.padding = "24px";
+            container.style.boxSizing = "border-box";
+
+            var html = "";
+
+            /* 1. Header Banner */
+            html += '<div style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); border-radius: 12px; padding: 22px 26px; color: #ffffff; margin-bottom: 20px;">';
+            html += '  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">';
+            html += '    <div>';
+            html += '      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">';
+            html += '        <span style="background: #4f46e5; color: #ffffff; font-weight: 800; font-size: 13px; padding: 3px 8px; border-radius: 6px; letter-spacing: 0.5px;">AccessAI</span>';
+            html += '        <span style="font-size: 10px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Accessibility Audit Report</span>';
+            html += '      </div>';
+            html += '      <h1 style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em;">WCAG 2.1 Compliance Assessment</h1>';
+            html += '    </div>';
+            html += '    <div style="text-align: right;">';
+            html += '      <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 6px 14px; display: inline-block;">';
+            html += '        <div style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Generated</div>';
+            html += '        <div style="font-size: 11px; font-weight: 600; color: #ffffff;">' + esc(dateStr) + ' &bull; ' + esc(timeStr) + '</div>';
+            html += '      </div>';
+            html += '    </div>';
+            html += '  </div>';
+
+            html += '  <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px; font-size: 11px;">';
+            html += '    <div>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Audited Target</span>';
+            html += '      <strong style="color: #ffffff; font-size: 13px;">' + esc(pageTitle) + '</strong>';
+            html += '      <span style="color: #cbd5e1; display: block; font-size: 10px; word-break: break-all;">' + esc(pageUrl) + '</span>';
+            html += '    </div>';
+            html += '    <div>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Compliance Standard</span>';
+            html += '      <strong style="color: #ffffff; font-size: 12px;">WCAG 2.1 Level AA</strong>';
+            html += '    </div>';
+            html += '    <div>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Audit Engine</span>';
+            html += '      <strong style="color: #ffffff; font-size: 12px;">AccessAI Engine v1.2</strong>';
+            html += '    </div>';
+            html += '  </div>';
+            html += '</div>';
+
+            /* 2. Executive Scorecard & Metrics */
+            html += '<div style="display: flex; gap: 12px; margin-bottom: 22px; page-break-inside: avoid; break-inside: avoid;">';
+            html += '  <div style="flex: 1.3; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 18px; display: flex; align-items: center; gap: 16px;">';
+            html += '    <div style="width: 64px; height: 64px; border-radius: 50%; background: ' + scoreBg + '; color: ' + scoreColor + '; border: 3px solid ' + scoreBorder + '; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">';
+            html += '      <span style="font-size: 22px; line-height: 1;">' + esc(score) + '</span>';
+            html += '      <span style="font-size: 8px; opacity: 0.85;">/100</span>';
+            html += '    </div>';
+            html += '    <div>';
+            html += '      <div style="font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Accessibility Score</div>';
+            html += '      <div style="font-size: 16px; font-weight: 800; color: #0f172a; margin: 2px 0;">' + esc(scoreLabel) + '</div>';
+            html += '      <div style="font-size: 10px; color: #64748b;">' + esc(passedChecks) + ' of ' + esc(totalChecks) + ' Criteria Passing</div>';
+            html += '    </div>';
+            html += '  </div>';
+
+            html += '  <div style="flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px;">';
+            html += '    <div style="font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Total Violations</div>';
+            html += '    <div style="font-size: 24px; font-weight: 800; color: ' + (parseInt(totalIssues, 10) > 0 ? '#dc2626' : '#059669') + '; margin: 2px 0;">' + esc(totalIssues) + '</div>';
+            html += '    <div style="font-size: 10px; color: #64748b;">Actionable items detected</div>';
+            html += '  </div>';
+
+            html += '  <div style="flex: 1.2; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; font-size: 10px;">';
+            html += '    <div style="font-size: 9px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 6px;">Findings Breakdown</div>';
+            html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Image Alt Text:</span> <strong style="color: ' + (altIssues.length ? '#dc2626' : '#059669') + ';">' + altIssues.length + '</strong></div>';
+            html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Heading Hierarchy:</span> <strong style="color: ' + (headingIssues.length ? '#dc2626' : '#059669') + ';">' + headingIssues.length + '</strong></div>';
+            html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Form Labels:</span> <strong style="color: ' + (formIssues.length ? '#dc2626' : '#059669') + ';">' + formIssues.length + '</strong></div>';
+            html += '    <div style="display: flex; justify-content: space-between;"><span style="color: #475569;">Color Contrast:</span> <strong style="color: ' + (contrastIssues.length ? '#dc2626' : '#059669') + ';">' + contrastIssues.length + '</strong></div>';
+            html += '  </div>';
+            html += '</div>';
+
+            /* Helper function for category sections */
+            function renderSectionHeader(title, wcag, count, isPassText) {
+                var s = '<div style="display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #4f46e5; padding-left: 10px; margin: 18px 0 10px;">';
+                s += '  <div>';
+                s += '    <h3 style="margin: 0; font-size: 13px; font-weight: 700; color: #0f172a;">' + esc(title) + '</h3>';
+                s += '    <div style="font-size: 9px; color: #64748b;">' + esc(wcag) + '</div>';
+                s += '  </div>';
+                if (count === 0) {
+                    s += '  <span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 10px; font-size: 9.5px; font-weight: 700;">' + esc(isPassText || '✓ All Clear') + '</span>';
+                } else {
+                    s += '  <span style="background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 10px; font-size: 9.5px; font-weight: 700;">' + count + ' Issues Found</span>';
+                }
+                s += '</div>';
+                return s;
+            }
+
+            function renderEmptyNotice(msg) {
+                return '<div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; color: #166534; font-size: 10px; margin-bottom: 14px;"><strong>✓ Passed:</strong> ' + esc(msg) + '</div>';
+            }
+
+            /* Section 1: Image Alt Text */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("1. Image Alternative Text Audit", "WCAG 2.1 Guideline 1.1.1 Non-text Content (Level A)", altIssues.length, "✓ All Images Compliant");
+            if (altIssues.length === 0) {
+                html += renderEmptyNotice("All images examined in this page contain descriptive alternative text for screen readers.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 10%;">Severity</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 32%;">Image Resource</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                altIssues.forEach(function (issue, idx) {
+                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
+                    html += '    <td style="padding: 7px 9px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 7px 9px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8.5px;">' + esc(issue.severity) + '</span></td>';
+                    html += '    <td style="padding: 7px 9px; font-family: monospace; font-size: 8.5px; word-break: break-all; color: #334155;">' + esc(issue.src) + '</td>';
+                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 2: Heading Structure */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("2. Heading Hierarchy & Structure", "WCAG 2.1 Guideline 1.3.1 Info & Relationships (Level A)", headingIssues.length, "✓ Logical Hierarchy");
+            if (headingIssues.length === 0) {
+                html += renderEmptyNotice("Headings follow a strict logical progression without any skipped heading levels.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 14%;">Sequence</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 28%;">Heading Text</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                headingIssues.forEach(function (issue, idx) {
+                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
+                    html += '    <td style="padding: 7px 9px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 7px 9px;"><span style="background: #fef3c7; color: #92400e; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8.5px;">' + esc(issue.transition) + '</span></td>';
+                    html += '    <td style="padding: 7px 9px; font-style: italic; color: #334155;">' + esc(issue.text) + '</td>';
+                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 3: Form Controls */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("3. Form Controls & Input Labels", "WCAG 2.1 Guideline 3.3.2 Labels or Instructions (Level A)", formIssues.length, "✓ All Controls Labeled");
+            if (formIssues.length === 0) {
+                html += renderEmptyNotice("All interactive form inputs, selects, and textareas have accessible names and labels.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 20%;">Issue</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 16%;">Control Type</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 24%;">Field Identifier</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                formIssues.forEach(function (issue, idx) {
+                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
+                    html += '    <td style="padding: 7px 9px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 7px 9px;"><span style="background: #f1f5f9; color: #475569; padding: 2px 5px; border-radius: 4px; font-weight: 600; font-size: 8.5px;">' + esc(issue.control) + '</span></td>';
+                    html += '    <td style="padding: 7px 9px; font-family: monospace; font-size: 8.5px; color: #334155;">' + esc(issue.field) + '</td>';
+                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 4: Color Contrast */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("4. Computed Color Contrast Ratio", "WCAG 2.1 Guideline 1.4.3 Contrast Minimum (Level AA)", contrastIssues.length, "✓ AA Compliant");
+            if (contrastIssues.length === 0) {
+                html += renderEmptyNotice("No color contrast violations detected. Tested text elements satisfy WCAG AA minimum 4.5:1 ratio.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 14px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 9px; text-transform: uppercase;">';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 22%;">Element Selector</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 22%;">Text Preview</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 16%;">Measured vs Min</th>';
+                html += '    <th style="padding: 7px 9px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                contrastIssues.forEach(function (issue, idx) {
+                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
+                    html += '    <td style="padding: 7px 9px; font-family: monospace; font-size: 8.5px; color: #0f172a; word-break: break-all;">' + esc(issue.element) + '</td>';
+                    html += '    <td style="padding: 7px 9px; font-style: italic; color: #334155;">' + esc(issue.sample) + '</td>';
+                    html += '    <td style="padding: 7px 9px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8.5px;">' + esc(issue.ratio) + '</span> <span style="color: #64748b; font-size: 8.5px;">(need ' + esc(issue.required) + ')</span></td>';
+                    html += '    <td style="padding: 7px 9px; color: #3730a3; background: #eef2ff; border-radius: 4px;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* 5. Remediation Roadmap Box */
+            html += '<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-top: 20px; page-break-inside: avoid; break-inside: avoid;">';
+            html += '  <h4 style="margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em;">Recommended Remediation Priority</h4>';
+            html += '  <ul style="margin: 0; padding-left: 18px; font-size: 10px; color: #475569; line-height: 1.5;">';
+            html += '    <li><strong>Priority 1 (Critical):</strong> Populate missing alt text on all active link images and informational graphics.</li>';
+            html += '    <li><strong>Priority 2 (High):</strong> Ensure every interactive form field has a distinct, programmatic label for assistive technologies.</li>';
+            html += '    <li><strong>Priority 3 (Medium):</strong> Adjust CSS color values on flagged low-contrast elements to achieve the 4.5:1 ratio requirement.</li>';
+            html += '    <li><strong>Priority 4 (Structural):</strong> Maintain continuous H1 &rarr; H2 &rarr; H3 heading hierarchy for proper screen reader landmark navigation.</li>';
+            html += '  </ul>';
+            html += '</div>';
+
+            /* 6. Document Footer */
+            html += '<div style="border-top: 1px solid #e2e8f0; margin-top: 20px; padding-top: 12px; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; page-break-inside: avoid; break-inside: avoid;">';
+            html += '  <span>AccessAI Automated WCAG Compliance Engine &bull; WordPress Accessibility Suite</span>';
+            html += '  <span>Confidential &bull; Page 1 of Audit Report</span>';
+            html += '</div>';
+
+            container.innerHTML = html;
+            document.body.appendChild(container);
+
+            var opt = {
+                margin: [8, 8, 10, 8],
+                filename: "AccessAI-Audit-Report-" + pageSlug + "-" + now.toISOString().slice(0, 10) + ".pdf",
+                image: { type: "jpeg", quality: 0.98 },
+                html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    letterRendering: true,
+                    logging: false,
+                    windowWidth: 800
+                },
+                jsPDF: {
+                    unit: "mm",
+                    format: "a4",
+                    orientation: "portrait"
+                },
+                pagebreak: {
+                    mode: ["avoid-all", "css", "legacy"]
+                }
+            };
+
+            window.html2pdf().set(opt).from(container).save().then(function () {
+                if (container.parentNode) container.parentNode.removeChild(container);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                var statusEl = document.getElementById("accessai-scan-status");
+                if (statusEl) {
+                    statusEl.className = "accessai-scan-status is-ok";
+                    statusEl.textContent = "✓ PDF accessibility report downloaded successfully!";
+                    setTimeout(function () {
+                        statusEl.className = "accessai-scan-status";
+                        statusEl.textContent = "";
+                    }, 5000);
+                }
+            }).catch(function (err) {
+                if (container.parentNode) container.parentNode.removeChild(container);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                alert("Could not generate PDF: " + (err.message || "Unknown error."));
+            });
+        });
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Bootstrap                                                             */
     /* ------------------------------------------------------------------ */
     document.addEventListener("DOMContentLoaded", function () {
         initTestButton();
         initPageScan();
+        initPdfReportExport();
 
         // Auto-explain all active issue tables sequentially to avoid connection congestion.
         var tables = [

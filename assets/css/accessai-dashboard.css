@@ -519,6 +519,82 @@
     margin: 0 !important;
 }
 
+/* ==========================================================================
+   Download Report (PDF) Button
+   ========================================================================== */
+.wp-core-ui .accessai-wrap .accessai-pdf-btn,
+.accessai-wrap .accessai-pdf-btn {
+    height: 42px !important;
+    min-height: 42px !important;
+    padding: 0 18px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    line-height: 1 !important;
+    background: #ffffff !important;
+    border: 1px solid var(--accessai-slate-200) !important;
+    border-radius: var(--accessai-radius-md) !important;
+    color: var(--accessai-slate-700) !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    white-space: nowrap !important;
+    text-shadow: none !important;
+    vertical-align: middle !important;
+    box-shadow: var(--accessai-shadow-sm) !important;
+}
+
+.wp-core-ui .accessai-wrap .accessai-pdf-btn span,
+.accessai-wrap .accessai-pdf-btn span {
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
+.accessai-pdf-btn:hover:not(:disabled) {
+    background: #ffffff !important;
+    border-color: #ef4444 !important;
+    color: #b91c1c !important;
+    box-shadow: 0 4px 14px -2px rgba(239, 68, 68, 0.22) !important;
+    transform: translateY(-1px);
+}
+
+.accessai-pdf-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.accessai-pdf-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed !important;
+}
+
+.wp-core-ui .accessai-wrap .accessai-pdf-btn .dashicons,
+.accessai-wrap .accessai-pdf-btn .dashicons {
+    font-size: 18px !important;
+    width: 18px !important;
+    height: 18px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+    color: #ef4444 !important;
+    transition: transform 0.2s ease;
+}
+
+.accessai-pdf-btn:hover:not(:disabled) .dashicons {
+    transform: scale(1.12);
+}
+
+/* Spinner rotation animation */
+.accessai-spin {
+    animation: accessai-spin-anim 0.9s linear infinite !important;
+}
+
+@keyframes accessai-spin-anim {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* Scan status notification */
 .accessai-scan-status {
     padding: 0;
