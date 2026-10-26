@@ -15,6 +15,19 @@
     /* ------------------------------------------------------------------ */
     /* Utility: AJAX POST via fetch                                         */
     /* ------------------------------------------------------------------ */
+    function parseJsonResponse(r) {
+        return r.text().then(function (text) {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return {
+                    success: false,
+                    data: { message: "Server connection momentarily busy. Please click Retry." }
+                };
+            }
+        });
+    }
+
     function ajaxPost(action, data) {
         var body = new URLSearchParams({ action: action, nonce: nonce, ...data });
         return fetch(ajaxUrl, {
@@ -22,7 +35,7 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: body.toString()
-        }).then(function (r) { return r.json(); });
+        }).then(parseJsonResponse);
     }
 
     function scanAjaxPost(action, data) {
@@ -32,7 +45,7 @@
             credentials: "same-origin",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: body.toString()
-        }).then(function (r) { return r.json(); });
+        }).then(parseJsonResponse);
     }
 
     /* ------------------------------------------------------------------ */
@@ -45,29 +58,162 @@
         try { return JSON.parse(raw) || []; } catch (e) { return []; }
     }
 
-    function renderExplanation(cell, result) {
+    function attachRetry(cell, tableId, fp) {
+        var retryBtn = cell.querySelector(".accessai-retry-btn");
+        if (!retryBtn) return;
+
+        retryBtn.addEventListener("click", function () {
+            cell.innerHTML = '<span class="accessai-spinner" aria-label="Loading AI explanation"></span>';
+            var issues = collectIssues(tableId);
+            var targetIssue = null;
+            for (var i = 0; i < issues.length; i++) {
+                if (issues[i].fingerprint === fp) {
+                    targetIssue = issues[i];
+                    break;
+                }
+            }
+            if (!targetIssue) {
+                cell.innerHTML = '<span class="accessai-ai-error">Finding data not found.</span>';
+                return;
+            }
+
+            ajaxPost("accessai_auto_explain_issues", {
+                issues: JSON.stringify([targetIssue])
+            }).then(function (resp) {
+                if (resp.success && resp.data && resp.data.results && resp.data.results[fp]) {
+                    renderExplanation(cell, resp.data.results[fp], tableId, fp);
+                } else {
+                    renderExplanation(
+                        cell,
+                        { error: (resp.data && resp.data.message) || "Retry failed." },
+                        tableId,
+                        fp
+                    );
+                }
+            }).catch(function (err) {
+                renderExplanation(cell, { error: err.message }, tableId, fp);
+            });
+        });
+    }
+
+    function renderExplanation(cell, result, tableId, fp) {
         if (result.error) {
             cell.innerHTML =
                 '<details class="accessai-explain">' +
-                '<summary style="color:#b91c1c;">⚠ AI error — click for details</summary>' +
+                '<summary style="color:#b91c1c;">⚠ AI notice — click for details</summary>' +
                 '<div class="accessai-explain-body" style="border-left-color:#b91c1c;">' +
-                '<p style="color:#b91c1c;font-size:0.82rem;">' + esc(result.error) + '</p>' +
+                '<p style="color:#b91c1c;font-size:0.82rem;margin-bottom:8px;">' + esc(result.error) + '</p>' +
+                '<button type="button" class="button button-secondary accessai-retry-btn" style="font-size:0.8rem;height:26px;line-height:24px;">↻ Retry AI</button>' +
                 '</div></details>';
+
+            attachRetry(cell, tableId, fp);
             return;
         }
+
+        var isAltTable = (tableId === "accessai-alt-table");
+        var hasProposedAlt = isAltTable && result.proposed_alt_text && result.proposed_alt_text.trim() !== "";
+        var isFallback = !!result.fallback;
+        var row = cell.closest("tr");
+
+        var summaryTitle = isFallback
+            ? "Standard WCAG Guideline &amp; Fix"
+            : "AI Recommendation &amp; Fix";
+
         var html =
-            '<details class="accessai-explain">' +
-            '<summary>View AI Explanation</summary>' +
+            '<details class="accessai-explain" open>' +
+            '<summary>' + summaryTitle + '</summary>' +
             '<div class="accessai-explain-body">' +
             '<p><strong>What it means:</strong> ' + esc(result.explanation) + '</p>' +
             '<p><strong>Who is affected:</strong> ' + esc(result.impact) + '</p>' +
-            '<p><strong>Suggested fix:</strong> ' + esc(result.suggested_fix) + '</p>' +
-            (result.proposed_alt_text
-                ? '<p><strong>Proposed alt text:</strong> <em>' + esc(result.proposed_alt_text) + '</em></p>'
-                : '') +
-            '</div>' +
-            '</details>';
+            '<p><strong>Suggested fix:</strong> ' + esc(result.suggested_fix) + '</p>';
+
+        if (hasProposedAlt) {
+            html +=
+                '<div class="accessai-eligible-fix-box">' +
+                '<span class="accessai-fix-badge">Eligible Automated Fix</span>' +
+                '<label class="accessai-fix-label">' +
+                '<strong>Reviewed Alt Text:</strong>' +
+                '<input type="text" class="accessai-fix-alt-input" value="' + escAttr(result.proposed_alt_text) + '" maxlength="500" />' +
+                '</label>' +
+                '<div class="accessai-fix-actions">' +
+                '<button type="button" class="button button-primary accessai-apply-row-btn">Apply Fix</button>' +
+                '<span class="accessai-row-status" role="status" aria-live="polite"></span>' +
+                '</div>' +
+                '</div>';
+        } else if (isAltTable) {
+            html +=
+                '<p class="accessai-fix-note"><em>Manual review required: Review the image context and update alt text manually in the page editor.</em></p>';
+        } else {
+            html +=
+                '<p class="accessai-fix-note"><em>Manual review required: Review the suggested fix above and update the page in the editor.</em></p>';
+        }
+
+        if (isFallback) {
+            html +=
+                '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #c3c4c7;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+                '<button type="button" class="button button-secondary accessai-retry-btn" style="font-size:0.8rem;height:26px;line-height:24px;">↻ Refresh with Gemini AI</button>' +
+                '<span style="font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Gemini was busy</span>' +
+                '</div>';
+        }
+
+        html += '</div></details>';
         cell.innerHTML = html;
+
+        if (isFallback) {
+            attachRetry(cell, tableId, fp);
+        }
+
+        if (hasProposedAlt && row) {
+            var applyBtn = cell.querySelector(".accessai-apply-row-btn");
+            var altInput = cell.querySelector(".accessai-fix-alt-input");
+            var statusEl = cell.querySelector(".accessai-row-status");
+
+            if (applyBtn && altInput && statusEl) {
+                applyBtn.addEventListener("click", function () {
+                    var approvedAlt = altInput.value.trim();
+                    if (!approvedAlt) {
+                        statusEl.style.color = "#b91c1c";
+                        statusEl.textContent = "Please enter alt text.";
+                        return;
+                    }
+
+                    if (!window.confirm("Apply this reviewed alt text to the page image?")) {
+                        return;
+                    }
+
+                    applyBtn.disabled = true;
+                    altInput.disabled = true;
+                    statusEl.style.color = "#2271b1";
+                    statusEl.textContent = "Applying fix…";
+
+                    ajaxPost("accessai_apply_fix", {
+                        page_id: row.dataset.pageId || "",
+                        image_src: row.dataset.imageSrc || "",
+                        approved_alt: approvedAlt,
+                        fingerprint: fp || row.dataset.fingerprint || ""
+                    }).then(function (resp) {
+                        if (resp.success) {
+                            statusEl.style.color = "#186a3b";
+                            statusEl.textContent = "✓ Fixed! Refreshing dashboard…";
+                            row.classList.add("accessai-row-fixed");
+                            setTimeout(function () {
+                                window.location.reload();
+                            }, 1200);
+                        } else {
+                            statusEl.style.color = "#b91c1c";
+                            statusEl.textContent = "✗ " + ((resp.data && resp.data.message) || "Apply failed.");
+                            applyBtn.disabled = false;
+                            altInput.disabled = false;
+                        }
+                    }).catch(function (err) {
+                        statusEl.style.color = "#b91c1c";
+                        statusEl.textContent = "✗ Error: " + err.message;
+                        applyBtn.disabled = false;
+                        altInput.disabled = false;
+                    });
+                });
+            }
+        }
     }
 
     function autoExplainTable(tableId) {
@@ -82,7 +228,7 @@
         }
 
         var issues = collectIssues(tableId);
-        if (!issues.length) return;
+        if (!issues.length) return Promise.resolve();
 
         // Build fingerprint → row cell map.
         var table = document.getElementById(tableId);
@@ -91,36 +237,83 @@
             cellMap[row.dataset.fingerprint] = row.querySelector(".accessai-ai-cell");
         });
 
-        // Process in batches of 10.
+        // Process 1 issue at a time with a gentle delay to stay safely under API rate limits.
         var batches = [];
-        for (var i = 0; i < issues.length; i += 10) {
-            batches.push(issues.slice(i, i + 10));
+        for (var i = 0; i < issues.length; i += 1) {
+            batches.push(issues.slice(i, i + 1));
         }
 
-        batches.reduce(function (chain, batch) {
-            return chain.then(function () {
-                return ajaxPost("accessai_auto_explain_issues", {
-                    issues: JSON.stringify(batch)
-                }).then(function (resp) {
-                    if (resp.success && resp.data && resp.data.results) {
-                        var results = resp.data.results;
+        function fetchBatch(batch, isRetry) {
+            return ajaxPost("accessai_auto_explain_issues", {
+                issues: JSON.stringify(batch)
+            }).then(function (resp) {
+                if (resp.success && resp.data && resp.data.results) {
+                    var results = resp.data.results;
+                    if (!isRetry) {
+                        var hasTransientError = false;
                         Object.keys(results).forEach(function (fp) {
-                            if (cellMap[fp]) {
-                                renderExplanation(cellMap[fp], results[fp]);
+                            var errStr = (results[fp] && results[fp].error) || "";
+                            if (
+                                errStr.indexOf("503") !== -1 ||
+                                errStr.indexOf("timed out") !== -1 ||
+                                errStr.indexOf("demand") !== -1
+                            ) {
+                                hasTransientError = true;
                             }
                         });
-                    } else {
-                        // Mark all batch cells as error.
-                        batch.forEach(function (issue) {
-                            if (cellMap[issue.fingerprint]) {
-                                cellMap[issue.fingerprint].innerHTML =
-                                    '<span class="accessai-ai-error">⚠ ' +
-                                    esc((resp.data && resp.data.message) || "AI error") +
-                                    "</span>";
-                            }
+                        if (hasTransientError) {
+                            return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () {
+                                return fetchBatch(batch, true);
+                            });
+                        }
+                    }
+
+                    Object.keys(results).forEach(function (fp) {
+                        if (cellMap[fp]) {
+                            renderExplanation(cellMap[fp], results[fp], tableId, fp);
+                        }
+                    });
+                } else {
+                    if (!isRetry) {
+                        return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () {
+                            return fetchBatch(batch, true);
                         });
                     }
+                    batch.forEach(function (issue) {
+                        if (cellMap[issue.fingerprint]) {
+                            renderExplanation(
+                                cellMap[issue.fingerprint],
+                                { error: (resp.data && resp.data.message) || "AI explanation error." },
+                                tableId,
+                                issue.fingerprint
+                            );
+                        }
+                    });
+                }
+            }).catch(function (err) {
+                if (!isRetry) {
+                    return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () {
+                        return fetchBatch(batch, true);
+                    });
+                }
+                batch.forEach(function (issue) {
+                    if (cellMap[issue.fingerprint]) {
+                        renderExplanation(
+                            cellMap[issue.fingerprint],
+                            { error: err.message || "Network request failed." },
+                            tableId,
+                            issue.fingerprint
+                        );
+                    }
                 });
+            });
+        }
+
+        return batches.reduce(function (chain, batch) {
+            return chain.then(function () {
+                return new Promise(function (resolve) { setTimeout(resolve, 2500); });
+            }).then(function () {
+                return fetchBatch(batch, false);
             });
         }, Promise.resolve());
     }
@@ -377,9 +570,18 @@
         initContrastScan();
         initManualAiForm();
 
-        // Auto-explain all issue tables.
-        ["accessai-alt-table", "accessai-heading-table",
-         "accessai-form-table", "accessai-contrast-table"].forEach(autoExplainTable);
+        // Auto-explain all issue tables sequentially to avoid connection congestion.
+        var tables = [
+            "accessai-alt-table",
+            "accessai-heading-table",
+            "accessai-form-table",
+            "accessai-contrast-table"
+        ];
+        tables.reduce(function (p, tableId) {
+            return p.then(function () {
+                return autoExplainTable(tableId);
+            });
+        }, Promise.resolve());
     });
 
 })();

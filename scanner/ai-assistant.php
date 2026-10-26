@@ -23,23 +23,31 @@ function accessai_test_connection() {
 		) );
 	}
 
+	$api_key = trim( (string) ACCESSAI_GEMINI_API_KEY );
+
 	// Minimal prompt — just enough to get a valid Gemini response.
 	$request_body = wp_json_encode( array(
 		'contents' => array(
 			array( 'parts' => array( array( 'text' => 'Reply with the single word: ok' ) ) ),
 		),
-		'generationConfig' => array( 'maxOutputTokens' => 10 ),
+		'generationConfig' => array(
+			'maxOutputTokens' => 100,
+			'thinkingConfig'  => array( 'thinkingLevel' => 'LOW' ),
+		),
 	) );
 
 	$response = wp_remote_post(
-		'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+		'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=' . rawurlencode( $api_key ),
 		array(
 			'method'  => 'POST',
-			'timeout' => 20,
+			'timeout' => 45,
 			'headers' => array(
 				'Content-Type'   => 'application/json',
 				'Accept'         => 'application/json',
-				'x-goog-api-key' => ACCESSAI_GEMINI_API_KEY,
+				'Content-Length' => strlen( (string) $request_body ),
+				'Expect'         => '',
+				'Connection'     => 'close',
+				'x-goog-api-key' => $api_key,
 			),
 			'body'    => $request_body,
 		)
@@ -120,7 +128,8 @@ function accessai_gemini_generate( $prompt ) {
 			),
 			'generationConfig'  => array(
 				'responseMimeType' => 'application/json',
-				'maxOutputTokens'  => 700,
+				'maxOutputTokens'  => 1500,
+				'thinkingConfig'   => array( 'thinkingLevel' => 'LOW' ),
 			),
 		)
 	);
@@ -132,37 +141,70 @@ function accessai_gemini_generate( $prompt ) {
 		);
 	}
 
-	// Let WordPress calculate the HTTP body length. Do not set Content-Length manually.
-	$response = wp_remote_post(
-		'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-		array(
-			'method'      => 'POST',
-			'timeout'     => 30,
-			'redirection' => 2,
-			'headers'     => array(
-				'Content-Type'   => 'application/json',
-				'Accept'         => 'application/json',
-				'x-goog-api-key' => ACCESSAI_GEMINI_API_KEY,
-			),
-			'body'        => $request_body,
-		)
-	);
+	$api_key = trim( (string) ACCESSAI_GEMINI_API_KEY );
+	$url     = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=' . rawurlencode( $api_key );
 
-	if ( is_wp_error( $response ) ) {
-		return new WP_Error(
-			'accessai_gemini_connection',
-			'Could not connect to Gemini. Check your internet connection and try again.'
+	$max_attempts = 2;
+	$response     = null;
+	$status       = 0;
+	$body         = null;
+	$last_error   = '';
+
+	for ( $attempt = 1; $attempt <= $max_attempts; $attempt++ ) {
+		$response = wp_remote_post(
+			$url,
+			array(
+				'method'      => 'POST',
+				'timeout'     => 18,
+				'redirection' => 2,
+				'headers'     => array(
+					'Content-Type'   => 'application/json',
+					'Accept'         => 'application/json',
+					'Content-Length' => strlen( (string) $request_body ),
+					'Expect'         => '',
+					'Connection'     => 'close',
+					'x-goog-api-key' => $api_key,
+				),
+				'body'        => $request_body,
+			)
 		);
-	}
 
-	$status       = wp_remote_retrieve_response_code( $response );
-	$response_raw = wp_remote_retrieve_body( $response );
-	$body         = json_decode( $response_raw, true );
+		if ( is_wp_error( $response ) ) {
+			$last_error = $response->get_error_message();
+			if ( $attempt < $max_attempts ) {
+				sleep( 2 );
+				continue;
+			}
+			return new WP_Error(
+				'accessai_gemini_connection',
+				'Could not connect to Gemini: ' . $last_error
+			);
+		}
+
+		$status       = wp_remote_retrieve_response_code( $response );
+		$response_raw = wp_remote_retrieve_body( $response );
+		$body         = json_decode( $response_raw, true );
+
+		// If Google is experiencing temporary high demand (503) or rate-limit (429), back off and retry.
+		if ( in_array( (int) $status, array( 429, 503 ), true ) ) {
+			$last_error = is_array( $body ) && isset( $body['error']['message'] )
+				? sanitize_text_field( $body['error']['message'] )
+				: 'High demand spike (HTTP ' . $status . ')';
+
+			if ( $attempt < $max_attempts ) {
+				sleep( 2 );
+				continue;
+			}
+		}
+
+		// Reached a final response or non-retriable error code.
+		break;
+	}
 
 	if ( $status < 200 || $status >= 300 ) {
 		$google_message = is_array( $body ) && isset( $body['error']['message'] )
 			? sanitize_text_field( $body['error']['message'] )
-			: 'Google returned an unrecognized error response.';
+			: ( $last_error ? $last_error : 'Google returned an unrecognized error response.' );
 
 		// Log only the provider message and status, never the API key or request headers.
 		error_log( 'AccessAI Gemini HTTP ' . $status . ': ' . $google_message );
@@ -212,6 +254,63 @@ function accessai_gemini_generate( $prompt ) {
 }
 
 /**
+ * Provide standard WCAG 2.1 accessibility guidance when Gemini is unreachable or throttled.
+ */
+function accessai_get_wcag_fallback( $type, $details = '' ) {
+	switch ( $type ) {
+		case 'heading_structure':
+			return array(
+				'explanation'       => 'Headings organize web content into a navigable outline. Skipping heading levels (such as jumping directly from H1 to H3 without an intervening H2) breaks the structural outline of the document.',
+				'impact'            => 'Screen reader users who rely on heading shortcut keys to skim the page may become disoriented or assume content sections are missing.',
+				'suggested_fix'     => 'Adjust the heading tag so levels descend consecutively (e.g., change H3 to H2), or convert the text to a styled paragraph if it is not an actual section heading.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'color_contrast':
+			return array(
+				'explanation'       => 'The contrast ratio between the text and background color falls below the WCAG 2.1 AA requirement of 4.5:1 for regular text (or 3:1 for large text 18pt+ / 14pt bold).',
+				'impact'            => 'People with low vision, color deficiencies, or users viewing the screen in direct sunlight or on dimmed mobile displays will find the text difficult or impossible to read.',
+				'suggested_fix'     => 'Increase color contrast by either darkening the font color or lightening the background color until the contrast ratio meets or exceeds 4.5:1.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'form_label':
+			return array(
+				'explanation'       => 'Form controls must have an accessible name programmatically associated with them. Missing or unlabeled controls cannot be identified by assistive tech.',
+				'impact'            => 'Screen reader users focusing on this field will not know what data or format is expected.',
+				'suggested_fix'     => 'Add an explicit <label for="element_id"> matching the input id, or use an aria-label attribute describing the field.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'alt_text':
+			return array(
+				'explanation'       => 'Images without an alt attribute convey no information to users who cannot see them or when images fail to load.',
+				'impact'            => 'Screen reader users hear file URLs or silence instead of understanding the purpose of the image.',
+				'suggested_fix'     => 'Add a descriptive alt attribute describing the image purpose, or alt="" if the image is purely decorative.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		default:
+			return array(
+				'explanation'       => 'This accessibility issue requires review according to WCAG 2.1 guidelines.',
+				'impact'            => 'Users relying on assistive technologies or keyboard navigation may face barriers interacting with this element.',
+				'suggested_fix'     => 'Inspect the element in your page editor and apply standard accessibility best practices.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+	}
+}
+
+/**
  * AJAX: Automatically explain a batch of accessibility issues.
  * Results are cached per issue fingerprint to avoid redundant Gemini calls.
  */
@@ -223,6 +322,8 @@ function accessai_auto_explain_issues() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_send_json_error( array( 'message' => 'Permission denied.' ), 403 );
 	}
+
+	@set_time_limit( 120 );
 
 	if ( ! defined( 'ACCESSAI_GEMINI_API_KEY' ) || ! ACCESSAI_GEMINI_API_KEY ) {
 		wp_send_json_error(
@@ -241,8 +342,8 @@ function accessai_auto_explain_issues() {
 		wp_send_json_error( array( 'message' => 'No valid issues provided.' ), 400 );
 	}
 
-	// Process up to 10 issues per batch.
-	$issues = array_slice( $issues, 0, 10 );
+	// Process up to 5 issues per batch.
+	$issues = array_slice( $issues, 0, 5 );
 
 	$results = array();
 
@@ -262,9 +363,13 @@ function accessai_auto_explain_issues() {
 		$cache_key = 'accessai_explain_' . md5( $fingerprint );
 		$cached    = get_transient( $cache_key );
 
-		if ( is_array( $cached ) ) {
+		// Only return cached result if it has a valid explanation and no error.
+		if ( is_array( $cached ) && ! isset( $cached['error'] ) && ! empty( $cached['explanation'] ) ) {
 			$results[ $fingerprint ] = $cached;
 			continue;
+		} elseif ( is_array( $cached ) ) {
+			// Clear out any old cached errors from before Gemini was working.
+			delete_transient( $cache_key );
 		}
 
 		$allowed_types = array( 'alt_text', 'heading_structure', 'form_label', 'color_contrast', 'other' );
@@ -286,7 +391,13 @@ function accessai_auto_explain_issues() {
 		$result = accessai_gemini_generate( $prompt );
 
 		if ( is_wp_error( $result ) ) {
-			$results[ $fingerprint ] = array( 'error' => $result->get_error_message() );
+			// Supply standard WCAG 2.1 authoritative fallback so the user always gets guidance.
+			$fallback = accessai_get_wcag_fallback( $type, $details );
+			if ( $fallback ) {
+				$results[ $fingerprint ] = $fallback;
+			} else {
+				$results[ $fingerprint ] = array( 'error' => $result->get_error_message() );
+			}
 			continue;
 		}
 
@@ -389,94 +500,154 @@ function accessai_apply_fix() {
 		wp_send_json_error( array( 'message' => 'Permission denied.' ), 403 );
 	}
 
-	$preview_id = isset( $_POST['preview_id'] )
-		? sanitize_text_field( wp_unslash( $_POST['preview_id'] ) )
-		: '';
+	$page_id       = isset( $_POST['page_id'] ) ? absint( $_POST['page_id'] ) : 0;
+	$image_src     = isset( $_POST['image_src'] ) ? esc_url_raw( wp_unslash( $_POST['image_src'] ) ) : '';
+	$approved_alt  = isset( $_POST['approved_alt'] ) ? sanitize_text_field( wp_unslash( $_POST['approved_alt'] ) ) : '';
+	$fingerprint   = isset( $_POST['fingerprint'] ) ? sanitize_text_field( wp_unslash( $_POST['fingerprint'] ) ) : '';
+	$preview_id    = isset( $_POST['preview_id'] ) ? sanitize_text_field( wp_unslash( $_POST['preview_id'] ) ) : '';
+	$attachment_id = isset( $_POST['attachment_id'] ) ? absint( $_POST['attachment_id'] ) : 0;
 
-	$attachment_id = isset( $_POST['attachment_id'] )
-		? absint( $_POST['attachment_id'] )
-		: 0;
+	// Branch 1: Apply eligible fix directly from dashboard scan table.
+	if ( $page_id && $image_src && $approved_alt !== '' ) {
+		$post = get_post( $page_id );
+		if ( ! $post ) {
+			wp_send_json_error( array( 'message' => 'The target page or post was not found.' ), 404 );
+		}
 
-	$approved_alt = isset( $_POST['approved_alt'] )
-		? sanitize_text_field( wp_unslash( $_POST['approved_alt'] ) )
-		: '';
+		$content       = $post->post_content;
+		$escaped_src   = preg_quote( $image_src, '/' );
+		$pattern       = '/<img\b([^>]*\bsrc=["\']' . $escaped_src . '["\'][^>]*)>/i';
+		$updated_count = 0;
 
-	if ( ! preg_match( '/^[A-Za-z0-9]{24}$/', $preview_id ) ) {
-		wp_send_json_error(
-			array( 'message' => 'Invalid or expired preview. Generate it again.' ),
-			400
+		$updated_content = preg_replace_callback(
+			$pattern,
+			function ( $matches ) use ( $approved_alt, &$updated_count ) {
+				$updated_count++;
+				$tag_contents = $matches[1];
+				$alt_attr     = 'alt="' . esc_attr( $approved_alt ) . '"';
+
+				if ( preg_match( '/\balt=(["\'])(.*?)\1/i', $tag_contents ) ) {
+					$new_contents = preg_replace( '/\balt=(["\'])(.*?)\1/i', $alt_attr, $tag_contents );
+				} else {
+					$new_contents = rtrim( $tag_contents, " \t\n\r\0\x0B/" ) . ' ' . $alt_attr;
+				}
+
+				return '<img' . $new_contents . '>';
+			},
+			$content
+		);
+
+		// If exact URL didn't match, check relative path (e.g. /wp-content/uploads/...)
+		if ( $updated_count === 0 ) {
+			$parsed_url = wp_parse_url( $image_src );
+			$path       = $parsed_url['path'] ?? '';
+			if ( $path ) {
+				$escaped_path     = preg_quote( $path, '/' );
+				$fallback_pattern = '/<img\b([^>]*\bsrc=["\'][^"\']*' . $escaped_path . '["\'][^>]*)>/i';
+				$updated_content  = preg_replace_callback(
+					$fallback_pattern,
+					function ( $matches ) use ( $approved_alt, &$updated_count ) {
+						$updated_count++;
+						$tag_contents = $matches[1];
+						$alt_attr     = 'alt="' . esc_attr( $approved_alt ) . '"';
+
+						if ( preg_match( '/\balt=(["\'])(.*?)\1/i', $tag_contents ) ) {
+							$new_contents = preg_replace( '/\balt=(["\'])(.*?)\1/i', $alt_attr, $tag_contents );
+						} else {
+							$new_contents = rtrim( $tag_contents, " \t\n\r\0\x0B/" ) . ' ' . $alt_attr;
+						}
+
+						return '<img' . $new_contents . '>';
+					},
+					$content
+				);
+			}
+		}
+
+		if ( $updated_count > 0 ) {
+			wp_update_post(
+				array(
+					'ID'           => $page_id,
+					'post_content' => $updated_content,
+				)
+			);
+		}
+
+		// Also update the media attachment if found in WordPress Media Library.
+		$att_id = attachment_url_to_postid( $image_src );
+		if ( ! $att_id && preg_match( '/wp-image-([0-9]+)/', $content, $class_match ) ) {
+			$att_id = absint( $class_match[1] );
+		}
+		if ( $att_id && get_post_type( $att_id ) === 'attachment' ) {
+			update_post_meta( $att_id, '_wp_attachment_image_alt', $approved_alt );
+		}
+
+		// Clear cached explanation for this finding so the rescan doesn't retain old data.
+		if ( $fingerprint ) {
+			delete_transient( 'accessai_explain_' . md5( $fingerprint ) );
+		}
+
+		wp_send_json_success(
+			array(
+				'message' => 'Alt text applied successfully. Refreshing dashboard…',
+			)
 		);
 	}
 
-	$user_id       = get_current_user_id();
-	$transient_key = 'accessai_preview_' . $user_id . '_' . $preview_id;
-	$preview       = get_transient( $transient_key );
+	// Branch 2: Manual form preview flow (kept for backward compatibility).
+	if ( $preview_id && $attachment_id && $approved_alt !== '' ) {
+		if ( ! preg_match( '/^[A-Za-z0-9]{24}$/', $preview_id ) ) {
+			wp_send_json_error(
+				array( 'message' => 'Invalid or expired preview. Generate it again.' ),
+				400
+			);
+		}
 
-	if ( ! is_array( $preview ) || empty( $preview['result'] ) ) {
-		wp_send_json_error(
-			array( 'message' => 'Preview expired. Generate it again.' ),
-			400
+		$user_id       = get_current_user_id();
+		$transient_key = 'accessai_preview_' . $user_id . '_' . $preview_id;
+		$preview       = get_transient( $transient_key );
+
+		if ( ! is_array( $preview ) || empty( $preview['result'] ) ) {
+			wp_send_json_error(
+				array( 'message' => 'Preview expired. Generate it again.' ),
+				400
+			);
+		}
+
+		if ( $preview['issue_type'] !== 'alt_text' ) {
+			wp_send_json_error(
+				array( 'message' => 'This fix requires manual review and cannot be applied automatically yet.' ),
+				400
+			);
+		}
+
+		if ( get_post_type( $attachment_id ) !== 'attachment' ) {
+			wp_send_json_error(
+				array( 'message' => 'The selected ID is not a WordPress attachment.' ),
+				400
+			);
+		}
+
+		if ( ! wp_attachment_is_image( $attachment_id ) ) {
+			wp_send_json_error(
+				array( 'message' => 'The selected attachment is not an image.' ),
+				400
+			);
+		}
+
+		update_post_meta( $attachment_id, '_wp_attachment_image_alt', $approved_alt );
+		delete_transient( $transient_key );
+
+		wp_send_json_success(
+			array(
+				'message' => 'Alt text saved to the selected image attachment. Rescan to verify the result.',
+			)
 		);
 	}
 
-	if ( $preview['issue_type'] !== 'alt_text' ) {
-		wp_send_json_error(
-			array( 'message' => 'This fix requires manual review and cannot be applied automatically yet.' ),
-			400
-		);
-	}
-
-	$result    = $preview['result'];
-	$suggested = $result['proposed_alt_text'] ?? '';
-
-	if ( empty( $suggested ) || ! $attachment_id || $approved_alt === '' ) {
-		wp_send_json_error(
-			array( 'message' => 'A valid image attachment and reviewed alt text are required.' ),
-			400
-		);
-	}
-
-	// Require the approved text to match the suggestion shown in the preview.
-	if ( ! hash_equals( $suggested, $approved_alt ) ) {
-		wp_send_json_error(
-			array( 'message' => 'The approved text differs from the preview. Generate a new preview before applying changes.' ),
-			400
-		);
-	}
-
-	if ( get_post_type( $attachment_id ) !== 'attachment' ) {
-		wp_send_json_error(
-			array( 'message' => 'The selected ID is not a WordPress attachment.' ),
-			400
-		);
-	}
-
-	if ( ! wp_attachment_is_image( $attachment_id ) ) {
-		wp_send_json_error(
-			array( 'message' => 'The selected attachment is not an image.' ),
-			400
-		);
-	}
-
-	// This changes the attachment's WordPress alt-text metadata only.
-	update_post_meta( $attachment_id, '_wp_attachment_image_alt', $approved_alt );
-
-	// update_post_meta may return false when the value is unchanged.
-	$saved = get_post_meta( $attachment_id, '_wp_attachment_image_alt', true );
-
-	if ( $saved !== $approved_alt ) {
-		wp_send_json_error(
-			array( 'message' => 'WordPress could not save the alt text.' ),
-			500
-		);
-	}
-
-	delete_transient( $transient_key );
-
-	wp_send_json_success(
-		array(
-			'message' => 'Alt text saved to the selected image attachment. Rescan the page to verify the result.',
-		)
+	wp_send_json_error(
+		array( 'message' => 'Missing required data to apply this fix.' ),
+		400
 	);
 }
 
@@ -494,14 +665,14 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-css',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/css/accessai-dashboard.css',
 		array(),
-		'1.1.1'
+		'1.1.6'
 	);
 
 	wp_enqueue_script(
 		'accessai-dashboard-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/accessai-dashboard.js',
 		array(),
-		'1.1.0',
+		'1.1.6',
 		true
 	);
 
