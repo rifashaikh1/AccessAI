@@ -8,16 +8,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Detect form controls without an associated label.
  */
-function accessai_scan_form_labels() {
+function accessai_scan_form_labels( $post_id = 0 ) {
     $issues = array();
 
-    $items = get_posts(
-        array(
-            'post_type'      => array( 'page', 'post' ),
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-        )
+    $args = array(
+        'post_type'      => array( 'page', 'post' ),
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
     );
+
+    if ( $post_id ) {
+        $args['p'] = absint( $post_id );
+    }
+
+    $items = get_posts( $args );
 
     foreach ( $items as $item ) {
         if ( empty( $item->post_content ) ) {

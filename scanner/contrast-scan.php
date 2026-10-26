@@ -43,6 +43,9 @@ function accessai_trigger_contrast_scan() {
 		wp_send_json_error( array( 'message' => 'Could not resolve the URL of the selected page.' ), 400 );
 	}
 
+	$user_id = get_current_user_id();
+	update_user_meta( $user_id, '_accessai_scanned_page_id', $page_id );
+
 	// Generate a single-use scan token tied to this page URL.
 	$token = wp_generate_password( 32, false, false );
 

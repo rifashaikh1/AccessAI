@@ -319,9 +319,9 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* Contrast scan: page selector + hidden iframe flow                    */
+    /* Full Page Audit: selector + background contrast iframe flow         */
     /* ------------------------------------------------------------------ */
-    function initContrastScan() {
+    function initPageScan() {
         var scanBtn = document.getElementById("accessai-scan-btn");
         var clearBtn = document.getElementById("accessai-clear-contrast-btn");
         var pageSelect = document.getElementById("accessai-page-select");
@@ -338,10 +338,14 @@
 
         scanBtn.addEventListener("click", function () {
             var pageId = pageSelect.value;
-            if (!pageId) { setStatus("Please select a page first.", "is-error"); return; }
+            if (!pageId) { setStatus("Please select a published page first.", "is-error"); return; }
+
+            var selectedTitle = pageSelect.options[pageSelect.selectedIndex]
+                ? pageSelect.options[pageSelect.selectedIndex].text
+                : "page";
 
             scanBtn.disabled = true;
-            setStatus("Preparing scan token…", "is-loading");
+            setStatus("Preparing audit session for \u201C" + selectedTitle + "\u201D…", "is-loading");
 
             // Step 1: get a signed scan token + page URL from server.
             scanAjaxPost("accessai_trigger_contrast_scan", { page_id: pageId })
@@ -352,20 +356,20 @@
                     var token = resp.data.token;
                     var pageUrl = resp.data.page_url;
 
-                    setStatus("Storing scan token…", "is-loading");
+                    setStatus("Initializing background checkpoints…", "is-loading");
 
                     // Step 2: store the token in user meta so wp_head injects the meta tag.
                     return scanAjaxPost("accessai_store_scan_token", { token: token })
-                        .then(function () { return { token: token, pageUrl: pageUrl }; });
+                        .then(function () { return { token: token, pageUrl: pageUrl, pageId: pageId, title: selectedTitle }; });
                 })
                 .then(function (info) {
-                    setStatus("Opening page in background scan frame…", "is-loading");
+                    setStatus("Auditing \u201C" + info.title + "\u201D across all checkpoints (Alt Text, Headings, Forms, Contrast)…", "is-loading");
 
                     // Remove any previous iframe.
                     iframeContainer.innerHTML = "";
                     if (noContrastNotice) noContrastNotice.style.display = "none";
 
-                    // Step 3: open hidden iframe — contrast-scanner.js runs automatically.
+                    // Step 3: open hidden iframe for live computed colour contrast checks.
                     var iframe = document.createElement("iframe");
                     iframe.src = info.pageUrl;
                     iframe.className = "accessai-scan-frame";
@@ -373,18 +377,14 @@
                     iframe.setAttribute("title", "Accessibility contrast scan frame");
                     iframeContainer.appendChild(iframe);
 
-                    setStatus(
-                        "Scanning \u201C" + pageSelect.options[pageSelect.selectedIndex].text + "\u201D \u2014 this may take up to 20 seconds…",
-                        "is-loading"
-                    );
-
-                    // Step 4: wait for the scan to finish (max 25 s), then reload.
+                    // Step 4: wait for live iframe analysis to finish, then reload dashboard for this page.
                     setTimeout(function () {
                         iframeContainer.innerHTML = "";
-                        setStatus("Scan complete — refreshing results…", "is-ok");
-                        // Small delay so the server has time to persist results.
-                        setTimeout(function () { window.location.reload(); }, 1500);
-                    }, 20000);
+                        setStatus("Audit complete — loading results for \u201C" + info.title + "\u201D…", "is-ok");
+                        setTimeout(function () {
+                            window.location.href = window.location.pathname + "?page=accessai&scanned_page=" + encodeURIComponent(info.pageId);
+                        }, 1200);
+                    }, 18000);
                 })
                 .catch(function (err) {
                     setStatus("Scan failed: " + (err.message || "Unknown error."), "is-error");
@@ -394,129 +394,18 @@
 
         if (clearBtn) {
             clearBtn.addEventListener("click", function () {
-                if (!window.confirm("Clear the current contrast scan results?")) return;
+                if (!window.confirm("Clear the current page audit results?")) return;
                 clearBtn.disabled = true;
                 scanAjaxPost("accessai_clear_contrast_results", {})
-                    .then(function () { window.location.reload(); })
+                    .then(function () {
+                        window.location.href = window.location.pathname + "?page=accessai";
+                    })
                     .catch(function () {
                         setStatus("Could not clear results.", "is-error");
                         clearBtn.disabled = false;
                     });
             });
         }
-    }
-
-    /* ------------------------------------------------------------------ */
-    /* Manual AI form (existing functionality, preserved)                   */
-    /* ------------------------------------------------------------------ */
-    function initManualAiForm() {
-        var form = document.getElementById("accessai-ai-form");
-        if (!form) return;
-
-        var message = document.getElementById("accessai-ai-message");
-        var preview = document.getElementById("accessai-ai-preview");
-        var applyButton = document.getElementById("accessai-apply-button");
-        var currentPreviewId = "";
-
-        function showMessage(text, isError) {
-            message.textContent = text;
-            message.style.color = isError ? "#b91c1c" : "#166534";
-        }
-
-        function addDetail(label, value) {
-            var section = document.createElement("section");
-            section.style.marginTop = "14px";
-            var h = document.createElement("h3");
-            h.textContent = label;
-            var p = document.createElement("p");
-            p.textContent = value || "Not provided.";
-            section.append(h, p);
-            preview.appendChild(section);
-        }
-
-        form.addEventListener("submit", async function (event) {
-            event.preventDefault();
-            var type = document.getElementById("accessai-issue-type").value;
-            var details = document.getElementById("accessai-issue-details").value.trim();
-
-            if (!details) {
-                showMessage("Enter details about the accessibility issue first.", true);
-                return;
-            }
-
-            form.querySelector('[type="submit"]').disabled = true;
-            applyButton.hidden = true;
-            preview.replaceChildren();
-            currentPreviewId = "";
-            showMessage("Asking Gemini…", false);
-
-            try {
-                var resp = await ajaxPost("accessai_ai_preview", { issue_type: type, details: details });
-                if (!resp.success) throw new Error(resp.data && resp.data.message || "Request failed.");
-
-                currentPreviewId = resp.data.preview_id;
-                var result = resp.data.result;
-
-                addDetail("Explanation", result.explanation);
-                addDetail("Who may be affected", result.impact);
-                addDetail("Suggested fix", result.suggested_fix);
-
-                if (type === "alt_text" && result.proposed_alt_text) {
-                    var h3 = document.createElement("h3");
-                    h3.textContent = "Proposed image alt text";
-                    var input = document.createElement("input");
-                    input.type = "text"; input.id = "accessai-approved-alt";
-                    input.maxLength = 500; input.value = result.proposed_alt_text;
-                    input.style.width = "100%";
-                    var note = document.createElement("p");
-                    note.textContent = "Review carefully. Enter the WordPress image attachment ID to apply.";
-                    var idLabel = document.createElement("label");
-                    idLabel.htmlFor = "accessai-attachment-id";
-                    idLabel.textContent = "Image attachment ID";
-                    var idInput = document.createElement("input");
-                    idInput.type = "number"; idInput.min = "1"; idInput.step = "1";
-                    idInput.id = "accessai-attachment-id";
-                    idInput.style.cssText = "display:block;margin-top:6px;";
-                    preview.append(h3, input, note, idLabel, idInput);
-                    applyButton.hidden = false;
-                    applyButton.style.display = "inline-block";
-                } else {
-                    addDetail("Next step", "This finding is review-only. AccessAI has not changed your site.");
-                }
-                showMessage(resp.data.message, false);
-            } catch (err) {
-                showMessage(err.message, true);
-            } finally {
-                form.querySelector('[type="submit"]').disabled = false;
-            }
-        });
-
-        applyButton.addEventListener("click", async function () {
-            if (!currentPreviewId) return;
-            var altInput = document.getElementById("accessai-approved-alt");
-            var attachInput = document.getElementById("accessai-attachment-id");
-            if (!altInput || !attachInput || !attachInput.value) {
-                showMessage("Enter the image attachment ID before applying.", true); return;
-            }
-            if (!window.confirm("Apply this reviewed alt text to the selected image attachment?")) return;
-            applyButton.disabled = true;
-            showMessage("Applying approved change…", false);
-            try {
-                var resp = await ajaxPost("accessai_apply_fix", {
-                    preview_id: currentPreviewId,
-                    attachment_id: attachInput.value,
-                    approved_alt: altInput.value
-                });
-                if (!resp.success) throw new Error(resp.data && resp.data.message || "Apply failed.");
-                showMessage(resp.data.message, false);
-                applyButton.hidden = true; applyButton.style.display = "none";
-                currentPreviewId = "";
-            } catch (err) {
-                showMessage(err.message, true);
-            } finally {
-                applyButton.disabled = false;
-            }
-        });
     }
 
     /* ------------------------------------------------------------------ */
@@ -567,10 +456,9 @@
     /* ------------------------------------------------------------------ */
     document.addEventListener("DOMContentLoaded", function () {
         initTestButton();
-        initContrastScan();
-        initManualAiForm();
+        initPageScan();
 
-        // Auto-explain all issue tables sequentially to avoid connection congestion.
+        // Auto-explain all active issue tables sequentially to avoid connection congestion.
         var tables = [
             "accessai-alt-table",
             "accessai-heading-table",

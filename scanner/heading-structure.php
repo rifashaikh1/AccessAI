@@ -8,16 +8,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Detect skipped heading levels in published pages and posts.
  */
-function accessai_scan_heading_structure() {
+function accessai_scan_heading_structure( $post_id = 0 ) {
     $issues = array();
 
-    $items = get_posts(
-        array(
-            'post_type'      => array( 'page', 'post' ),
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-        )
+    $args = array(
+        'post_type'      => array( 'page', 'post' ),
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
     );
+
+    if ( $post_id ) {
+        $args['p'] = absint( $post_id );
+    }
+
+    $items = get_posts( $args );
 
     foreach ( $items as $item ) {
         if ( empty( $item->post_content ) ) {

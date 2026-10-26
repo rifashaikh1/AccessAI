@@ -9,16 +9,20 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Find images with missing or empty alt attributes
  * in published WordPress pages and posts.
  */
-function accessai_scan_missing_alt_text() {
+function accessai_scan_missing_alt_text( $post_id = 0 ) {
     $issues = array();
 
-    $items = get_posts(
-        array(
-            'post_type'      => array( 'page', 'post' ),
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-        )
+    $args = array(
+        'post_type'      => array( 'page', 'post' ),
+        'post_status'    => 'publish',
+        'posts_per_page' => -1,
     );
+
+    if ( $post_id ) {
+        $args['p'] = absint( $post_id );
+    }
+
+    $items = get_posts( $args );
 
     foreach ( $items as $item ) {
         $html = $item->post_content;
