@@ -578,13 +578,34 @@
                 }
             });
 
-            // Build offscreen printable HTML document
+            // Display a polished loading modal while generating
+            var overlay = document.createElement("div");
+            overlay.id = "accessai-pdf-loading-overlay";
+            overlay.style.position = "fixed";
+            overlay.style.inset = "0";
+            overlay.style.backgroundColor = "rgba(15, 23, 42, 0.72)";
+            overlay.style.backdropFilter = "blur(4px)";
+            overlay.style.webkitBackdropFilter = "blur(4px)";
+            overlay.style.zIndex = "9999999";
+            overlay.style.display = "flex";
+            overlay.style.alignItems = "center";
+            overlay.style.justifyContent = "center";
+            overlay.innerHTML = '<div style="background: #ffffff; border-radius: 16px; padding: 32px 36px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 400px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">' +
+                '<div style="width: 52px; height: 52px; border-radius: 14px; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;"><span class="dashicons dashicons-pdf" style="font-size: 28px; width: 28px; height: 28px; line-height: 1;"></span></div>' +
+                '<h3 style="margin: 0 0 6px; font-size: 17px; font-weight: 700; color: #0f172a;">Generating Audit PDF</h3>' +
+                '<p style="margin: 0 0 16px; font-size: 12px; color: #64748b; line-height: 1.4;">Formatting WCAG compliance tables and scorecards&hellip;</p>' +
+                '<div style="display: inline-flex; align-items: center; gap: 8px; color: #4f46e5; font-size: 12px; font-weight: 600;"><span class="dashicons dashicons-update accessai-spin"></span> Assembling pages&hellip;</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+
+            // Container placed at (0, 0) in the viewport under the modal overlay
             var container = document.createElement("div");
             container.id = "accessai-pdf-render-box";
-            container.style.position = "absolute";
-            container.style.left = "-9999px";
+            container.style.position = "fixed";
+            container.style.left = "0";
             container.style.top = "0";
             container.style.width = "780px";
+            container.style.zIndex = "99999";
             container.style.background = "#ffffff";
             container.style.color = "#1e293b";
             container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
@@ -803,8 +824,15 @@
             container.innerHTML = html;
             document.body.appendChild(container);
 
+            function cleanup() {
+                if (container && container.parentNode) container.parentNode.removeChild(container);
+                if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+
             var opt = {
-                margin: [8, 8, 10, 8],
+                margin: [10, 10, 12, 10],
                 filename: "AccessAI-Audit-Report-" + pageSlug + "-" + now.toISOString().slice(0, 10) + ".pdf",
                 image: { type: "jpeg", quality: 0.98 },
                 html2canvas: {
@@ -812,7 +840,8 @@
                     useCORS: true,
                     letterRendering: true,
                     logging: false,
-                    windowWidth: 800
+                    scrollX: 0,
+                    scrollY: 0
                 },
                 jsPDF: {
                     unit: "mm",
@@ -820,14 +849,12 @@
                     orientation: "portrait"
                 },
                 pagebreak: {
-                    mode: ["avoid-all", "css", "legacy"]
+                    mode: ["css", "legacy"]
                 }
             };
 
             window.html2pdf().set(opt).from(container).save().then(function () {
-                if (container.parentNode) container.parentNode.removeChild(container);
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
+                cleanup();
                 var statusEl = document.getElementById("accessai-scan-status");
                 if (statusEl) {
                     statusEl.className = "accessai-scan-status is-ok";
@@ -838,9 +865,7 @@
                     }, 5000);
                 }
             }).catch(function (err) {
-                if (container.parentNode) container.parentNode.removeChild(container);
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
+                cleanup();
                 alert("Could not generate PDF: " + (err.message || "Unknown error."));
             });
         });
