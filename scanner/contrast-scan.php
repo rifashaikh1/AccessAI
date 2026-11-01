@@ -146,8 +146,10 @@ function accessai_maybe_inject_scan_token() {
 
 	$current_norm = rtrim( strtolower( $current_url ), '/' );
 	$stored_norm  = rtrim( strtolower( $stored_url ), '/' );
+	$current_path = rtrim( (string) wp_parse_url( $current_url, PHP_URL_PATH ), '/' );
+	$stored_path  = rtrim( (string) wp_parse_url( $stored_url, PHP_URL_PATH ), '/' );
 
-	if ( $current_norm !== $stored_norm ) {
+	if ( $current_norm !== $stored_norm && $current_path !== $stored_path ) {
 		return;
 	}
 

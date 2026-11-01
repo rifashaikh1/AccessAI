@@ -37,16 +37,13 @@ function accessai_test_connection() {
 	) );
 
 	$response = wp_remote_post(
-		'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=' . rawurlencode( $api_key ),
+		'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
 		array(
 			'method'  => 'POST',
-			'timeout' => 45,
+			'timeout' => 15,
 			'headers' => array(
 				'Content-Type'   => 'application/json',
 				'Accept'         => 'application/json',
-				'Content-Length' => strlen( (string) $request_body ),
-				'Expect'         => '',
-				'Connection'     => 'close',
 				'x-goog-api-key' => $api_key,
 			),
 			'body'    => $request_body,
@@ -142,7 +139,7 @@ function accessai_gemini_generate( $prompt ) {
 	}
 
 	$api_key = trim( (string) ACCESSAI_GEMINI_API_KEY );
-	$url     = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=' . rawurlencode( $api_key );
+	$url     = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
 
 	$max_attempts = 2;
 	$response     = null;
@@ -151,18 +148,20 @@ function accessai_gemini_generate( $prompt ) {
 	$last_error   = '';
 
 	for ( $attempt = 1; $attempt <= $max_attempts; $attempt++ ) {
+		// On retry attempt, fallback to gemini-2.5-flash if 3.8-flash is congested
+		$current_url = ( $attempt > 1 )
+			? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+			: $url;
+
 		$response = wp_remote_post(
-			$url,
+			$current_url,
 			array(
 				'method'      => 'POST',
-				'timeout'     => 18,
+				'timeout'     => 15,
 				'redirection' => 2,
 				'headers'     => array(
 					'Content-Type'   => 'application/json',
 					'Accept'         => 'application/json',
-					'Content-Length' => strlen( (string) $request_body ),
-					'Expect'         => '',
-					'Connection'     => 'close',
 					'x-goog-api-key' => $api_key,
 				),
 				'body'        => $request_body,
@@ -298,6 +297,66 @@ function accessai_get_wcag_fallback( $type, $details = '' ) {
 				'fallback'          => true,
 			);
 
+		case 'keyboard':
+			return array(
+				'explanation'       => 'All interactive functionality must be accessible via keyboard without requiring specific timings, and focus must never become trapped in any component (WCAG 2.1.1 & 2.1.2).',
+				'impact'            => 'Blind users and individuals with motor disabilities navigating exclusively with keyboards, switch devices, or sip-and-puff controls cannot interact with or escape from this element.',
+				'suggested_fix'     => 'Ensure all interactive controls can receive focus using the Tab key (tabindex="0"), are operable with Enter and Space keys, and avoid positive tabindex values that disrupt the natural tab order.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'links':
+			return array(
+				'explanation'       => 'The purpose of each link must be clear from its text alone or from its immediate programmatic context (WCAG 2.4.4). Ambiguous text like "Click here" or "Read more" provides no destination information when navigated via screen reader link lists.',
+				'impact'            => 'Assistive technology users who generate alphabetical link lists or navigate via the Tab key hear isolated phrases with zero context regarding destination.',
+				'suggested_fix'     => 'Rewrite link text to state the specific destination (e.g. "Read the 2026 Accessibility Report") or add an aria-label attribute describing the specific page target.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'buttons':
+			return array(
+				'explanation'       => 'Buttons and interactive components must have a programmatically determinable name and role (WCAG 4.1.2). Buttons without text or icon-only buttons without labels cannot be announced by screen readers.',
+				'impact'            => 'Screen reader users focusing on this button hear only "Button" without knowing what action will be performed.',
+				'suggested_fix'     => 'Add visible text, an aria-label attribute (e.g. aria-label="Close dialog"), or descriptive alt text on any enclosed icon/graphic.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'text_spacing':
+			return array(
+				'explanation'       => 'Content must remain fully legible and functional when users apply custom text spacing (line-height 1.5, paragraph spacing 2em, letter-spacing 0.12em, word-spacing 0.16em) or resize text to 200% (WCAG 1.4.4 & 1.4.12).',
+				'impact'            => 'Users with low vision or cognitive reading conditions who customize text styles experience clipped, overlapping, or cut-off text.',
+				'suggested_fix'     => 'Avoid fixed CSS heights and overflow:hidden on text containers. Allow containers to expand fluidly with min-height and relative font units (rem/em).',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'focus':
+			return array(
+				'explanation'       => 'Keyboard-operable user interface components must provide a clearly visible focus indicator when navigated via the keyboard (WCAG 2.4.7).',
+				'impact'            => 'Sighted keyboard users cannot determine which element currently has focus, making navigation confusing or impossible.',
+				'suggested_fix'     => 'Do not suppress outline (outline: none or outline: 0) without providing an equivalent visible focus ring. Ensure the focus indicator has at least a 3:1 contrast ratio against background colors.',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
+		case 'tables':
+			return array(
+				'explanation'       => 'Data tables must provide clear programmatic relationships between header cells and data cells using <th> and scope attributes (WCAG 1.3.1).',
+				'impact'            => 'Screen reader users navigating table cells hear numbers and text without knowing the corresponding column or row topic.',
+				'suggested_fix'     => 'Designate header cells with <th> and add scope="col" for column headers and scope="row" for row headers. If the table is used solely for visual layout, specify role="presentation".',
+				'proposed_alt_text' => '',
+				'manual_review'     => true,
+				'fallback'          => true,
+			);
+
 		default:
 			return array(
 				'explanation'       => 'This accessibility issue requires review according to WCAG 2.1 guidelines.',
@@ -372,7 +431,19 @@ function accessai_auto_explain_issues() {
 			delete_transient( $cache_key );
 		}
 
-		$allowed_types = array( 'alt_text', 'heading_structure', 'form_label', 'color_contrast', 'other' );
+		$allowed_types = array(
+			'alt_text',
+			'heading_structure',
+			'form_label',
+			'color_contrast',
+			'keyboard',
+			'links',
+			'buttons',
+			'text_spacing',
+			'focus',
+			'tables',
+			'other'
+		);
 
 		if ( ! in_array( $type, $allowed_types, true ) ) {
 			continue;
@@ -427,6 +498,12 @@ function accessai_ai_preview() {
 		'heading_structure',
 		'form_label',
 		'color_contrast',
+		'keyboard',
+		'links',
+		'buttons',
+		'text_spacing',
+		'focus',
+		'tables',
 		'other',
 	);
 

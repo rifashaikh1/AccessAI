@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: AccessAI
- * Description: AI-assisted accessibility auditing for WordPress websites.
- * Version: 1.1.0
+ * Description: AI-assisted accessibility auditing for WordPress websites across 10 WCAG 2.1 check categories.
+ * Version: 1.3.0
  * Author: AccessAI Team
  * License: GPL-2.0-or-later
  */
@@ -11,19 +11,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Load all 10 accessibility scanner modules.
 require_once plugin_dir_path( __FILE__ ) . 'scanner/alt-text.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/heading-structure.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/form-labels.php';
-require_once plugin_dir_path( __FILE__ ) . 'scanner/ai-assistant.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/contrast-scan.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/link-accessibility.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/button-accessibility.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/table-accessibility.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/keyboard-accessibility.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/text-spacing-adaptation.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/focus-visibility.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/ai-assistant.php';
 
 // Register admin menu.
 add_action( 'admin_menu', 'accessai_register_menu' );
 
 /**
  * Load contrast-scanner.js on public frontend pages for logged-in admins.
- * This is required for the scan iframe to work — the script must be present
- * on the target page so it can read computed styles and send results back.
+ * Required for the scan iframe to run live computed browser evaluations.
  */
 add_action( 'wp_enqueue_scripts', 'accessai_load_contrast_scanner_frontend' );
 
@@ -36,7 +42,7 @@ function accessai_load_contrast_scanner_frontend() {
 		'accessai-contrast-scanner',
 		plugin_dir_url( __FILE__ ) . 'assets/js/contrast-scanner.js',
 		array(),
-		'1.1.0',
+		'1.3.0',
 		true
 	);
 }
@@ -54,7 +60,7 @@ function accessai_register_menu() {
 }
 
 /**
- * Render the full AccessAI admin dashboard.
+ * Render the full AccessAI admin dashboard covering all 10 check categories.
  */
 function accessai_render_dashboard() {
 	$user_id = get_current_user_id();
@@ -87,48 +93,167 @@ function accessai_render_dashboard() {
 		$active_page_id = 0;
 	}
 
-	// Run content scanners strictly for this specific page.
-	$issues                  = array();
+	// Initialize all 10 scan categories.
+	$alt_issues              = array();
 	$heading_issues          = array();
 	$form_issues             = array();
 	$contrast_results        = array();
+	$keyboard_issues         = array();
+	$link_issues             = array();
+	$button_issues           = array();
+	$text_spacing_results    = array();
+	$focus_results           = array();
+	$table_issues            = array();
 	$contrast_scan_completed = false;
 
 	if ( $active_page_id ) {
-		$issues         = accessai_scan_missing_alt_text( $active_page_id );
-		$heading_issues = accessai_scan_heading_structure( $active_page_id );
-		$form_issues    = accessai_scan_form_labels( $active_page_id );
+		// 1. Image Alt Text
+		$alt_issues = accessai_scan_missing_alt_text( $active_page_id );
 
-		$contrast_results        = get_transient( 'accessai_contrast_results_' . $user_id );
+		// 2. Heading Structure
+		$heading_issues = accessai_scan_heading_structure( $active_page_id );
+
+		// 3. Form Labels
+		$form_issues = accessai_scan_form_labels( $active_page_id );
+
+		// 4. Link Accessibility
+		$link_issues = accessai_scan_link_accessibility( $active_page_id );
+
+		// 5. Button Accessibility
+		$button_issues = accessai_scan_button_accessibility( $active_page_id );
+
+		// 6. Table Accessibility
+		$table_issues = accessai_scan_table_accessibility( $active_page_id );
+
+		// 7. Keyboard Accessibility (Server-side static checks)
+		$keyboard_static = accessai_scan_keyboard_accessibility( $active_page_id );
+
+		// 8. Text Resizing & Spacing (Server-side static checks)
+		$text_spacing_static = accessai_scan_text_spacing_adaptation( $active_page_id );
+
+		// 9. Focus Visibility (Server-side static checks)
+		$focus_static = accessai_scan_focus_visibility( $active_page_id );
+
+		// Live browser-based scans (retrieved from user transients).
+		$contrast_results        = get_transient( 'accessai_contrast_results_' . $user_id ) ?: array();
+		$focus_browser           = get_transient( 'accessai_focus_results_' . $user_id ) ?: array();
+		$text_spacing_browser    = get_transient( 'accessai_text_spacing_results_' . $user_id ) ?: array();
+		$keyboard_browser        = get_transient( 'accessai_browser_keyboard_results_' . $user_id ) ?: array();
+		$browser_buttons         = get_transient( 'accessai_browser_button_results_' . $user_id ) ?: array();
 		$contrast_scan_completed = get_transient( 'accessai_contrast_scan_completed_' . $user_id );
 
-		if ( ! is_array( $contrast_results ) ) {
-			$contrast_results = array();
+		if ( ! is_array( $contrast_results ) ) { $contrast_results = array(); }
+		if ( ! is_array( $focus_browser ) ) { $focus_browser = array(); }
+		if ( ! is_array( $text_spacing_browser ) ) { $text_spacing_browser = array(); }
+		if ( ! is_array( $keyboard_browser ) ) { $keyboard_browser = array(); }
+		if ( ! is_array( $browser_buttons ) ) { $browser_buttons = array(); }
+
+		// Merge static and live browser focus findings
+		$focus_results = $focus_static;
+		foreach ( $focus_browser as $f_b ) {
+			$found = false;
+			foreach ( $focus_static as $f_s ) {
+				if (
+					( ! empty( $f_s['element'] ) && $f_s['element'] === ( $f_b['element'] ?? '' ) ) ||
+					( ! empty( $f_s['target_text'] ) && $f_s['target_text'] === ( $f_b['target_text'] ?? '' ) )
+				) {
+					$found = true;
+					break;
+				}
+			}
+			if ( ! $found ) {
+				$focus_results[] = $f_b;
+			}
+		}
+
+		// Merge static and live browser keyboard findings
+		$keyboard_issues = array_merge( $keyboard_static, $keyboard_browser );
+
+		// Merge static and live browser button findings
+		$button_issues_merged = $button_issues;
+		foreach ( $browser_buttons as $b_btn ) {
+			$found = false;
+			foreach ( $button_issues as $existing_btn ) {
+				if ( ( $existing_btn['selector'] ?? '' ) !== '' && ( $existing_btn['selector'] ?? '' ) === ( $b_btn['selector'] ?? '' ) ) {
+					$found = true;
+					break;
+				}
+			}
+			if ( ! $found ) {
+				$button_issues_merged[] = $b_btn;
+			}
+		}
+		$button_issues = $button_issues_merged;
+
+		// Merge static and live browser text spacing findings
+		$text_spacing_results = $text_spacing_static;
+		foreach ( $text_spacing_browser as $ts_b ) {
+			$found = false;
+			foreach ( $text_spacing_static as $ts_s ) {
+				if (
+					( ! empty( $ts_s['selector'] ) && $ts_s['selector'] === ( $ts_b['element'] ?? '' ) ) ||
+					( ! empty( $ts_s['sample'] ) && $ts_s['sample'] === ( $ts_b['sample'] ?? '' ) )
+				) {
+					$found = true;
+					break;
+				}
+			}
+			if ( ! $found ) {
+				$text_spacing_results[] = $ts_b;
+			}
 		}
 	}
 
-	$total_issues = count( $issues ) + count( $heading_issues ) + count( $form_issues ) + count( $contrast_results );
+	$total_issues = count( $alt_issues ) +
+		count( $heading_issues ) +
+		count( $form_issues ) +
+		count( $contrast_results ) +
+		count( $keyboard_issues ) +
+		count( $link_issues ) +
+		count( $button_issues ) +
+		count( $text_spacing_results ) +
+		count( $focus_results ) +
+		count( $table_issues );
 
-	// Calculate accessibility score for this specific page.
+	// Calculate comprehensive compliance benchmark across 10 categories.
 	if ( $scanned_post ) {
 		$html = $scanned_post->post_content;
 		libxml_use_internal_errors( true );
 		$dom = new DOMDocument();
 		$dom->loadHTML( '<?xml encoding="utf-8" ?>' . ( $html ?: '<div></div>' ) );
+
 		$img_count     = $dom->getElementsByTagName( 'img' )->length;
+		$link_count    = $dom->getElementsByTagName( 'a' )->length;
+		$btn_count     = $dom->getElementsByTagName( 'button' )->length;
+		$table_count   = $dom->getElementsByTagName( 'table' )->length;
+
 		$heading_count = 0;
 		foreach ( $dom->getElementsByTagName( '*' ) as $node ) {
 			if ( preg_match( '/^h[1-6]$/i', $node->tagName ) ) {
 				$heading_count++;
 			}
 		}
+
 		$xpath      = new DOMXPath( $dom );
 		$form_count = $xpath->query( '//input[not(@type="hidden")] | //select | //textarea' )->length;
 		libxml_clear_errors();
 
-		$checks_estimated = max( 10, $img_count + max( 1, $heading_count ) + max( 1, $form_count ) + max( 5, count( $contrast_results ) ) );
-		$passed_checks    = max( 0, $checks_estimated - $total_issues );
-		$score            = min( 100, max( 0, round( ( $passed_checks / $checks_estimated ) * 100 ) ) );
+		$checks_estimated = max(
+			15,
+			max( 2, $img_count ) +
+			max( 2, $heading_count ) +
+			max( 2, $form_count ) +
+			max( 4, count( $contrast_results ) ) +
+			max( 2, $link_count ) +
+			max( 2, $btn_count ) +
+			max( 1, $table_count ) +
+			max( 2, count( $keyboard_issues ) ) +
+			max( 2, count( $focus_results ) ) +
+			max( 2, count( $text_spacing_results ) )
+		);
+
+		$passed_checks = max( 0, $checks_estimated - $total_issues );
+		$score         = min( 100, max( 0, round( ( $passed_checks / $checks_estimated ) * 100 ) ) );
 	} else {
 		$checks_estimated = 0;
 		$passed_checks    = 0;
@@ -155,11 +280,17 @@ function accessai_render_dashboard() {
 
 	$has_api_key = defined( 'ACCESSAI_GEMINI_API_KEY' ) && ACCESSAI_GEMINI_API_KEY;
 
-	// Build fingerprinted issue lists for auto-explain.
-	$alt_issues_json      = accessai_build_issue_data( $issues, 'alt_text' );
-	$heading_issues_json  = accessai_build_issue_data( $heading_issues, 'heading_structure' );
-	$form_issues_json     = accessai_build_issue_data( $form_issues, 'form_label' );
-	$contrast_issues_json = accessai_build_issue_data( $contrast_results, 'color_contrast' );
+	// Build fingerprinted issue lists for auto-explain across all 10 categories.
+	$alt_issues_json          = accessai_build_issue_data( $alt_issues, 'alt_text' );
+	$heading_issues_json      = accessai_build_issue_data( $heading_issues, 'heading_structure' );
+	$form_issues_json         = accessai_build_issue_data( $form_issues, 'form_label' );
+	$contrast_issues_json     = accessai_build_issue_data( $contrast_results, 'color_contrast' );
+	$keyboard_issues_json     = accessai_build_issue_data( $keyboard_issues, 'keyboard' );
+	$link_issues_json         = accessai_build_issue_data( $link_issues, 'links' );
+	$button_issues_json       = accessai_build_issue_data( $button_issues, 'buttons' );
+	$text_spacing_issues_json = accessai_build_issue_data( $text_spacing_results, 'text_spacing' );
+	$focus_issues_json        = accessai_build_issue_data( $focus_results, 'focus' );
+	$table_issues_json        = accessai_build_issue_data( $table_issues, 'tables' );
 
 	?>
 	<div class="wrap accessai-wrap">
@@ -175,9 +306,9 @@ function accessai_render_dashboard() {
 				<div class="accessai-brand-text">
 					<div class="accessai-brand-title-wrap">
 						<h1>AccessAI</h1>
-						<span class="accessai-version-pill">v1.2</span>
+						<span class="accessai-version-pill">v1.3 &bull; 10 Checkpoints</span>
 					</div>
-					<p class="accessai-subtitle">AI-assisted WCAG 2.1 accessibility auditing and automated remediation</p>
+					<p class="accessai-subtitle">Comprehensive WCAG 2.1 accessibility auditing and AI-assisted remediation across 10 core categories</p>
 				</div>
 			</div>
 			<div class="accessai-hero-status">
@@ -201,8 +332,8 @@ function accessai_render_dashboard() {
 			<div class="notice notice-warning accessai-notice">
 				<p>
 					<strong>Gemini API key not configured.</strong>
-					AI explanations will not be generated.
-					Add <code>define( 'ACCESSAI_GEMINI_API_KEY', 'your-key' );</code> to <code>wp-config.php</code>.
+					Standard WCAG 2.1 authoritative guidance fallbacks will be used.
+					Add <code>define( 'ACCESSAI_GEMINI_API_KEY', 'your-key' );</code> to <code>wp-config.php</code> to activate real-time Gemini recommendations.
 				</p>
 			</div>
 		<?php endif; ?>
@@ -216,8 +347,8 @@ function accessai_render_dashboard() {
 					<span class="dashicons dashicons-search"></span>
 				</div>
 				<div class="accessai-audit-header-content">
-					<h2>Target Page Audit</h2>
-					<p>Select any published page or post to audit all 4 accessibility checkpoints (Alt Text, Headings, Forms, and Colour Contrast) and compute its compliance score.</p>
+					<h2>Target Page Audit (10 Checkpoint Suite)</h2>
+					<p>Select any published page or post to audit all 10 WCAG checkpoints: Alt Text, Headings, Form Labels, Colour Contrast, Keyboard, Links, Buttons, Text Resizing &amp; Spacing, Focus Visibility, and Tables.</p>
 				</div>
 			</div>
 
@@ -244,7 +375,7 @@ function accessai_render_dashboard() {
 					</div>
 					<button id="accessai-scan-btn" type="button" class="accessai-scan-btn">
 						<span class="dashicons dashicons-update"></span>
-						<span>Scan Page</span>
+						<span>Scan Page (10 Checkpoints)</span>
 					</button>
 					<?php if ( $active_page_id ) : ?>
 						<button id="accessai-clear-contrast-btn" type="button" class="accessai-clear-btn">
@@ -263,7 +394,7 @@ function accessai_render_dashboard() {
 								data-total-checks="<?php echo esc_attr( $checks_estimated ); ?>"
 								title="Download detailed, professional WCAG accessibility audit PDF">
 							<span class="dashicons dashicons-pdf"></span>
-							<span>Download Report</span>
+							<span>Download 10-Check Audit Report</span>
 						</button>
 					<?php endif; ?>
 				</div>
@@ -292,7 +423,7 @@ function accessai_render_dashboard() {
 						<div class="accessai-progress-fill <?php echo esc_attr( $score_class ); ?>" style="width: <?php echo esc_attr( $score ); ?>%;"></div>
 					</div>
 				<?php endif; ?>
-				<p class="accessai-card-sub">Weighted page compliance</p>
+				<p class="accessai-card-sub">Automated audit benchmark</p>
 			</div>
 
 			<div class="accessai-score-card accessai-card-issues">
@@ -303,7 +434,7 @@ function accessai_render_dashboard() {
 				<div class="accessai-score-value accessai-score-warn">
 					<?php echo $score !== null ? esc_html( $total_issues ) : '—'; ?>
 				</div>
-				<p class="accessai-card-sub">Issues across 4 scanner modules</p>
+				<p class="accessai-card-sub">Issues across 10 scanner modules</p>
 			</div>
 
 			<div class="accessai-score-card accessai-card-target">
@@ -331,6 +462,18 @@ function accessai_render_dashboard() {
 			</div>
 		</div>
 
+		<!-- ============================================================
+		     WCAG COMPLIANCE BENCHMARK NOTICE (NON-COMPLIANCE DISCLAIMER)
+		     ============================================================ -->
+		<div class="accessai-disclaimer-card">
+			<span class="dashicons dashicons-info accessai-disclaimer-icon"></span>
+			<p>
+				<strong>Accessibility Evaluation Notice:</strong>
+				This compliance score is an automated programmatic benchmark across 10 measurable WCAG 2.1 AA criteria.
+				Automated testing cannot detect 100% of accessibility barriers (such as subjective image context, cognitive clarity, or full screen reader pronunciation) and is not legal proof of complete WCAG compliance. Manual evaluation with assistive technologies is always recommended.
+			</p>
+		</div>
+
 		<?php if ( ! $active_page_id ) : ?>
 			<div class="accessai-section accessai-welcome-box">
 				<div class="accessai-welcome-icon">
@@ -338,13 +481,13 @@ function accessai_render_dashboard() {
 				</div>
 				<div class="accessai-welcome-body">
 					<h3>Ready to audit accessibility</h3>
-					<p>Select a published page or post from the dropdown above and click <strong>Scan Page</strong> to run a complete evaluation across Alt Text, Headings, Form Labels, and Colour Contrast.</p>
+					<p>Select a published page or post from the dropdown above and click <strong>Scan Page (10 Checkpoints)</strong> to run a complete evaluation across all 10 WCAG categories.</p>
 				</div>
 			</div>
 		<?php else : ?>
 
 			<!-- ============================================================
-			     ALT TEXT SCAN RESULTS
+			     1. ALT TEXT SCAN RESULTS
 			     ============================================================ -->
 			<div class="accessai-section">
 				<div class="accessai-section-header">
@@ -353,20 +496,20 @@ function accessai_render_dashboard() {
 							<span class="dashicons dashicons-format-image"></span>
 						</div>
 						<div>
-							<h2>Missing &amp; Empty Alt Text</h2>
+							<h2>1. Missing &amp; Empty Alt Text</h2>
 							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 1.1.1 Non-text Content (Level A)</p>
 						</div>
 					</div>
 					<div>
-						<?php if ( empty( $issues ) ) : ?>
+						<?php if ( empty( $alt_issues ) ) : ?>
 							<span class="accessai-chip-pill accessai-chip-pass">✓ All Clear</span>
 						<?php else : ?>
-							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $issues ) ); ?> Needs Review</span>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $alt_issues ) ); ?> Needs Review</span>
 						<?php endif; ?>
 					</div>
 				</div>
 
-				<?php if ( empty( $issues ) ) : ?>
+				<?php if ( empty( $alt_issues ) ) : ?>
 					<div class="accessai-empty-state accessai-empty-pass">
 						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
 						<div class="accessai-empty-text">
@@ -381,24 +524,22 @@ function accessai_render_dashboard() {
 							<thead>
 								<tr>
 									<th>Issue</th>
-									<th>Severity</th>
-									<th>Page</th>
+									<th>Detection Status</th>
 									<th>Image Source</th>
 									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
 									<th>Action</th>
 								</tr>
 							</thead>
 							<tbody>
-								<?php foreach ( $issues as $issue ) :
+								<?php foreach ( $alt_issues as $issue ) :
 									$fp = md5( 'alt_text|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['image_src'] ?? '' ) );
 								?>
 									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
 										data-page-id="<?php echo esc_attr( $issue['page_id'] ?? '' ); ?>"
 										data-image-src="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>">
 										<td><strong><?php echo esc_html( $issue['type'] ); ?></strong></td>
-										<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $issue['severity'] ); ?></span></td>
-										<td><?php echo esc_html( $issue['page_title'] ); ?></td>
-										<td class="accessai-truncate" title="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>">
+										<td><span class="accessai-status-badge accessai-status-failure">Verified Failure</span></td>
+										<td class="accessai-wrap-col" title="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>">
 											<code><?php echo $issue['image_src'] ? esc_html( $issue['image_src'] ) : 'N/A'; ?></code>
 										</td>
 										<td class="accessai-ai-cell">
@@ -420,7 +561,7 @@ function accessai_render_dashboard() {
 			</div>
 
 			<!-- ============================================================
-			     HEADING STRUCTURE SCAN RESULTS
+			     2. HEADING STRUCTURE SCAN RESULTS
 			     ============================================================ -->
 			<div class="accessai-section">
 				<div class="accessai-section-header">
@@ -429,7 +570,7 @@ function accessai_render_dashboard() {
 							<span class="dashicons dashicons-editor-ol"></span>
 						</div>
 						<div>
-							<h2>Heading Structure &amp; Hierarchy</h2>
+							<h2>2. Heading Structure &amp; Hierarchy</h2>
 							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 1.3.1 Info and Relationships (Level A)</p>
 						</div>
 					</div>
@@ -457,7 +598,7 @@ function accessai_render_dashboard() {
 							<thead>
 								<tr>
 									<th>Issue</th>
-									<th>Page</th>
+									<th>Detection Status</th>
 									<th>Heading Transition</th>
 									<th>Heading Text</th>
 									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
@@ -470,9 +611,9 @@ function accessai_render_dashboard() {
 								?>
 									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
 										<td><strong><?php echo esc_html( $issue['type'] ); ?></strong></td>
-										<td><?php echo esc_html( $issue['page_title'] ); ?></td>
+										<td><span class="accessai-status-badge accessai-status-potential">Potential Issue</span></td>
 										<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $issue['previous'] . ' → ' . $issue['current'] ); ?></span></td>
-										<td><em><?php echo esc_html( $issue['heading_text'] ?: '(Empty heading)' ); ?></em></td>
+										<td class="accessai-wrap-col"><em><?php echo esc_html( $issue['heading_text'] ?: '(Empty heading)' ); ?></em></td>
 										<td class="accessai-ai-cell">
 											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
 										</td>
@@ -492,7 +633,7 @@ function accessai_render_dashboard() {
 			</div>
 
 			<!-- ============================================================
-			     FORM LABEL SCAN RESULTS
+			     3. FORM LABEL SCAN RESULTS
 			     ============================================================ -->
 			<div class="accessai-section">
 				<div class="accessai-section-header">
@@ -501,7 +642,7 @@ function accessai_render_dashboard() {
 							<span class="dashicons dashicons-feedback"></span>
 						</div>
 						<div>
-							<h2>Form Controls &amp; Input Labels</h2>
+							<h2>3. Form Controls &amp; Input Labels</h2>
 							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 3.3.2 Labels or Instructions (Level A)</p>
 						</div>
 					</div>
@@ -529,7 +670,7 @@ function accessai_render_dashboard() {
 							<thead>
 								<tr>
 									<th>Issue</th>
-									<th>Page</th>
+									<th>Detection Status</th>
 									<th>Control</th>
 									<th>Field Name</th>
 									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
@@ -542,14 +683,14 @@ function accessai_render_dashboard() {
 								?>
 									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
 										<td><strong><?php echo esc_html( $issue['type'] ); ?></strong></td>
-										<td><?php echo esc_html( $issue['page_title'] ); ?></td>
+										<td><span class="accessai-status-badge accessai-status-failure">Verified Failure</span></td>
 										<td>
 											<span class="accessai-tag"><?php echo esc_html( $issue['control'] ); ?></span>
 											<?php if ( $issue['field_type'] !== '' ) : ?>
 												<small>(<?php echo esc_html( $issue['field_type'] ); ?>)</small>
 											<?php endif; ?>
 										</td>
-										<td><code><?php echo esc_html( $issue['field_name'] ?: 'Not specified' ); ?></code></td>
+										<td class="accessai-wrap-col"><code><?php echo esc_html( $issue['field_name'] ?: 'Not specified' ); ?></code></td>
 										<td class="accessai-ai-cell">
 											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
 										</td>
@@ -569,7 +710,7 @@ function accessai_render_dashboard() {
 			</div>
 
 			<!-- ============================================================
-			     COLOUR CONTRAST SCAN RESULTS
+			     4. COLOUR CONTRAST SCAN RESULTS
 			     ============================================================ -->
 			<div class="accessai-section">
 				<div class="accessai-section-header">
@@ -578,7 +719,7 @@ function accessai_render_dashboard() {
 							<span class="dashicons dashicons-art"></span>
 						</div>
 						<div>
-							<h2>Computed Colour Contrast Ratio</h2>
+							<h2>4. Computed Colour Contrast Ratio</h2>
 							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 1.4.3 Contrast Minimum (Level AA)</p>
 						</div>
 					</div>
@@ -597,8 +738,8 @@ function accessai_render_dashboard() {
 					<div class="accessai-empty-state accessai-empty-neutral" id="accessai-no-contrast-notice">
 						<div class="accessai-empty-icon"><span class="dashicons dashicons-info-outline"></span></div>
 						<div class="accessai-empty-text">
-							<h4>Contrast evaluation pending</h4>
-							<p>Click <strong>Scan Page</strong> above to run live computed contrast analysis on this page.</p>
+							<h4>Live contrast evaluation pending</h4>
+							<p>Click <strong>Scan Page (10 Checkpoints)</strong> above to run live computed contrast analysis on this page.</p>
 						</div>
 					</div>
 				<?php elseif ( empty( $contrast_results ) ) : ?>
@@ -616,6 +757,7 @@ function accessai_render_dashboard() {
 							<thead>
 								<tr>
 									<th>Element</th>
+									<th>Detection Status</th>
 									<th>Text Sample</th>
 									<th>Contrast Ratio</th>
 									<th>Required</th>
@@ -628,9 +770,447 @@ function accessai_render_dashboard() {
 								?>
 									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
 										<td><code><?php echo esc_html( $result['element'] ?? '' ); ?></code></td>
-										<td><span class="accessai-text-sample"><?php echo esc_html( $result['text'] ?? '' ); ?></span></td>
+										<td><span class="accessai-status-badge accessai-status-failure">Verified Failure</span></td>
+										<td class="accessai-wrap-col"><span class="accessai-text-sample"><?php echo esc_html( $result['text'] ?? '' ); ?></span></td>
 										<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $result['ratio'] ?? '' ); ?></span></td>
 										<td><span class="accessai-badge accessai-badge-neutral"><?php echo esc_html( $result['required'] ?? '' ); ?></span></td>
+										<td class="accessai-ai-cell">
+											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     5. KEYBOARD ACCESSIBILITY & TRAPS
+			     ============================================================ -->
+			<div class="accessai-section">
+				<div class="accessai-section-header">
+					<div class="accessai-section-title-wrap">
+						<div class="accessai-section-icon-chip accessai-icon-keyboard">
+							<span class="dashicons dashicons-keyboard"></span>
+						</div>
+						<div>
+							<h2>5. Keyboard Accessibility &amp; Trap Prevention</h2>
+							<p class="accessai-wcag-ref">WCAG 2.1 Guidelines 2.1.1 Keyboard &amp; 2.1.2 No Keyboard Trap (Level A)</p>
+						</div>
+					</div>
+					<div>
+						<?php if ( empty( $keyboard_issues ) ) : ?>
+							<span class="accessai-chip-pill accessai-chip-pass">✓ Keyboard Navigable</span>
+						<?php else : ?>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $keyboard_issues ) ); ?> Findings</span>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( empty( $keyboard_issues ) ) : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>No keyboard accessibility defects detected</h4>
+							<p>Interactive controls are reachable via keyboard tab navigation without positive tabindex conflicts or traps.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-table-card">
+						<table class="accessai-table" id="accessai-keyboard-table"
+							   data-issues="<?php echo esc_attr( wp_json_encode( $keyboard_issues_json ) ); ?>">
+							<thead>
+								<tr>
+									<th>Finding</th>
+									<th>Detection Status</th>
+									<th>Element / Target</th>
+									<th>Description</th>
+									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $keyboard_issues as $k_issue ) :
+									$status_class = ( ( $k_issue['status'] ?? '' ) === 'Verified Failure' )
+										? 'accessai-status-failure'
+										: ( ( $k_issue['status'] ?? '' ) === 'Potential Issue' ? 'accessai-status-potential' : 'accessai-status-manual' );
+									$fp = md5( 'keyboard|' . ( $k_issue['type'] ?? '' ) . '|' . ( $k_issue['element'] ?? '' ) . '|' . ( $k_issue['context'] ?? '' ) );
+								?>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+										<td><strong><?php echo esc_html( $k_issue['type'] ?? 'Keyboard Finding' ); ?></strong></td>
+										<td><span class="accessai-status-badge <?php echo esc_attr( $status_class ); ?>"><?php echo esc_html( $k_issue['status'] ?? 'Potential Issue' ); ?></span></td>
+										<td class="accessai-wrap-col">
+											<code><?php echo wp_kses_post( $k_issue['element'] ?? '' ); ?></code>
+											<?php if ( ! empty( $k_issue['context'] ) ) : ?>
+												<div class="accessai-subcontext"><?php echo esc_html( $k_issue['context'] ); ?></div>
+											<?php endif; ?>
+										</td>
+										<td class="accessai-wrap-col"><?php echo esc_html( $k_issue['message'] ?? '' ); ?></td>
+										<td class="accessai-ai-cell">
+											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     6. LINK ACCESSIBILITY & CONTEXT
+			     ============================================================ -->
+			<div class="accessai-section">
+				<div class="accessai-section-header">
+					<div class="accessai-section-title-wrap">
+						<div class="accessai-section-icon-chip accessai-icon-links">
+							<span class="dashicons dashicons-admin-links"></span>
+						</div>
+						<div>
+							<h2>6. Link Purpose &amp; Text Context</h2>
+							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 2.4.4 Link Purpose (In Context) (Level A)</p>
+						</div>
+					</div>
+					<div>
+						<?php if ( empty( $link_issues ) ) : ?>
+							<span class="accessai-chip-pill accessai-chip-pass">✓ All Links Descriptive</span>
+						<?php else : ?>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $link_issues ) ); ?> Link Defects</span>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( empty( $link_issues ) ) : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>All evaluated links have clear purpose</h4>
+							<p>Anchor elements possess descriptive text or accessible names without vague "click here" phrases.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-table-card">
+						<table class="accessai-table" id="accessai-link-table"
+							   data-issues="<?php echo esc_attr( wp_json_encode( $link_issues_json ) ); ?>">
+							<thead>
+								<tr>
+									<th>Issue</th>
+									<th>Detection Status</th>
+									<th>Link Text</th>
+									<th>Destination URL</th>
+									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $link_issues as $l_issue ) :
+									$l_status_class = ( ( $l_issue['status'] ?? '' ) === 'Verified Failure' )
+										? 'accessai-status-failure'
+										: 'accessai-status-potential';
+									$fp = md5( 'links|' . ( $l_issue['type'] ?? '' ) . '|' . ( $l_issue['link_url'] ?? '' ) . '|' . ( $l_issue['link_text'] ?? '' ) );
+								?>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+										<td><strong><?php echo esc_html( $l_issue['type'] ?? 'Link Finding' ); ?></strong></td>
+										<td><span class="accessai-status-badge <?php echo esc_attr( $l_status_class ); ?>"><?php echo esc_html( $l_issue['status'] ?? 'Potential Issue' ); ?></span></td>
+										<td class="accessai-wrap-col"><code><?php echo esc_html( $l_issue['link_text'] ?? '(empty)' ); ?></code></td>
+										<td class="accessai-wrap-col"><span class="accessai-url-pill"><?php echo esc_html( $l_issue['link_url'] ?? '' ); ?></span></td>
+										<td class="accessai-ai-cell">
+											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     7. BUTTON ACCESSIBILITY
+			     ============================================================ -->
+			<div class="accessai-section">
+				<div class="accessai-section-header">
+					<div class="accessai-section-title-wrap">
+						<div class="accessai-section-icon-chip accessai-icon-buttons">
+							<span class="dashicons dashicons-marker"></span>
+						</div>
+						<div>
+							<h2>7. Button Name, Role &amp; Value</h2>
+							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 4.1.2 Name, Role, Value (Level A)</p>
+						</div>
+					</div>
+					<div>
+						<?php if ( empty( $button_issues ) ) : ?>
+							<span class="accessai-chip-pill accessai-chip-pass">✓ All Buttons Labeled</span>
+						<?php else : ?>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $button_issues ) ); ?> Button Issues</span>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( empty( $button_issues ) ) : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>All buttons have accessible names</h4>
+							<p>Native buttons, input triggers, and custom widgets possess accessible labels, values, or ARIA names.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-table-card">
+						<table class="accessai-table" id="accessai-button-table"
+							   data-issues="<?php echo esc_attr( wp_json_encode( $button_issues_json ) ); ?>">
+							<thead>
+								<tr>
+									<th>Issue</th>
+									<th>Detection Status</th>
+									<th>Button Element</th>
+									<th>Description</th>
+									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $button_issues as $b_issue ) :
+									$b_status_class = ( ( $b_issue['status'] ?? '' ) === 'Verified Failure' )
+										? 'accessai-status-failure'
+										: 'accessai-status-potential';
+									$fp = md5( 'buttons|' . ( $b_issue['type'] ?? '' ) . '|' . ( $b_issue['element'] ?? '' ) . '|' . ( $b_issue['button_text'] ?? '' ) );
+								?>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+										<td><strong><?php echo esc_html( $b_issue['type'] ?? 'Button Issue' ); ?></strong></td>
+										<td><span class="accessai-status-badge <?php echo esc_attr( $b_status_class ); ?>"><?php echo esc_html( $b_issue['status'] ?? 'Verified Failure' ); ?></span></td>
+										<td class="accessai-wrap-col"><?php echo wp_kses_post( $b_issue['element'] ?? '' ); ?></td>
+										<td class="accessai-wrap-col"><?php echo esc_html( $b_issue['message'] ?? '' ); ?></td>
+										<td class="accessai-ai-cell">
+											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     8. TEXT RESIZING & SPACING
+			     ============================================================ -->
+			<div class="accessai-section">
+				<div class="accessai-section-header">
+					<div class="accessai-section-title-wrap">
+						<div class="accessai-section-icon-chip accessai-icon-text">
+							<span class="dashicons dashicons-editor-textcolor"></span>
+						</div>
+						<div>
+							<h2>8. Text Resizing &amp; Spacing Adaptation</h2>
+							<p class="accessai-wcag-ref">WCAG 2.1 Guidelines 1.4.4 Resize Text &amp; 1.4.12 Text Spacing (Level AA)</p>
+						</div>
+					</div>
+					<div>
+						<?php if ( ! empty( $text_spacing_results ) ) : ?>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $text_spacing_results ) ); ?> Clipping Issues</span>
+						<?php elseif ( ! $contrast_scan_completed ) : ?>
+							<span class="accessai-chip-pill accessai-chip-neutral">Pending Live Scan</span>
+						<?php else : ?>
+							<span class="accessai-chip-pill accessai-chip-pass">✓ Resilient Layout</span>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( ! empty( $text_spacing_results ) ) : ?>
+					<div class="accessai-table-card">
+						<table class="accessai-table" id="accessai-text-spacing-table"
+							   data-issues="<?php echo esc_attr( wp_json_encode( $text_spacing_issues_json ) ); ?>">
+							<thead>
+								<tr>
+									<th>Issue</th>
+									<th>Detection Status</th>
+									<th>Element Container</th>
+									<th>Content Sample</th>
+									<th>Measurements</th>
+									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $text_spacing_results as $ts_issue ) :
+									$ts_status_class = ( ( $ts_issue['status'] ?? '' ) === 'Verified Failure' )
+										? 'accessai-status-failure'
+										: 'accessai-status-potential';
+									$fp = md5( 'text_spacing|' . ( $ts_issue['type'] ?? '' ) . '|' . ( $ts_issue['element'] ?? '' ) . '|' . ( $ts_issue['sample'] ?? '' ) );
+								?>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+										<td><strong><?php echo esc_html( $ts_issue['type'] ?? 'Text Spacing Finding' ); ?></strong></td>
+										<td><span class="accessai-status-badge <?php echo esc_attr( $ts_status_class ); ?>"><?php echo esc_html( $ts_issue['status'] ?? 'Verified Failure' ); ?></span></td>
+										<td><code><?php echo esc_html( $ts_issue['element'] ?? '' ); ?></code></td>
+										<td class="accessai-wrap-col"><em><?php echo esc_html( $ts_issue['sample'] ?? '' ); ?></em></td>
+										<td class="accessai-wrap-col"><small><?php echo esc_html( $ts_issue['metrics'] ?? '' ); ?></small></td>
+										<td class="accessai-ai-cell">
+											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php elseif ( ! $contrast_scan_completed ) : ?>
+					<div class="accessai-empty-state accessai-empty-neutral">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-info-outline"></span></div>
+						<div class="accessai-empty-text">
+							<h4>Live browser resizing &amp; spacing test pending</h4>
+							<p>Click <strong>Scan Page (10 Checkpoints)</strong> to run safe, non-destructive browser testing for 200% zoom and WCAG text spacing tolerance.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>Text scales and spaces without content loss</h4>
+							<p>Layouts tolerate 200% text magnification and WCAG 1.4.12 spacing without clipping or text obstruction.</p>
+						</div>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     9. FOCUS VISIBILITY
+			     ============================================================ -->
+			<div class="accessai-section">
+				<div class="accessai-section-header">
+					<div class="accessai-section-title-wrap">
+						<div class="accessai-section-icon-chip accessai-icon-focus">
+							<span class="dashicons dashicons-visibility"></span>
+						</div>
+						<div>
+							<h2>9. Focus Visibility &amp; Outline Indicators</h2>
+							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 2.4.7 Focus Visible (Level AA)</p>
+						</div>
+					</div>
+					<div>
+						<?php if ( ! empty( $focus_results ) ) : ?>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $focus_results ) ); ?> Focus Defects</span>
+						<?php elseif ( ! $contrast_scan_completed ) : ?>
+							<span class="accessai-chip-pill accessai-chip-neutral">Pending Live Scan</span>
+						<?php else : ?>
+							<span class="accessai-chip-pill accessai-chip-pass">✓ Focus Rings Present</span>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( ! empty( $focus_results ) ) : ?>
+					<div class="accessai-table-card">
+						<table class="accessai-table" id="accessai-focus-table"
+							   data-issues="<?php echo esc_attr( wp_json_encode( $focus_issues_json ) ); ?>">
+							<thead>
+								<tr>
+									<th>Issue</th>
+									<th>Detection Status</th>
+									<th>Interactive Element</th>
+									<th>Focus Indicator State</th>
+									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $focus_results as $f_issue ) :
+									$f_status_class = ( ( $f_issue['status'] ?? '' ) === 'Verified Failure' )
+										? 'accessai-status-failure'
+										: 'accessai-status-potential';
+									$fp = md5( 'focus|' . ( $f_issue['type'] ?? '' ) . '|' . ( $f_issue['element'] ?? '' ) . '|' . ( $f_issue['target_text'] ?? '' ) );
+								?>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+										<td><strong><?php echo esc_html( $f_issue['type'] ?? 'Focus Finding' ); ?></strong></td>
+										<td><span class="accessai-status-badge <?php echo esc_attr( $f_status_class ); ?>"><?php echo esc_html( $f_issue['status'] ?? 'Verified Failure' ); ?></span></td>
+										<td class="accessai-wrap-col">
+											<code><?php echo esc_html( $f_issue['element'] ?? '' ); ?></code>
+											<div class="accessai-subcontext"><?php echo esc_html( $f_issue['target_text'] ?? '' ); ?></div>
+										</td>
+										<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $f_issue['focus_style'] ?? 'outline: none' ); ?></span></td>
+										<td class="accessai-ai-cell">
+											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					</div>
+				<?php elseif ( ! $contrast_scan_completed ) : ?>
+					<div class="accessai-empty-state accessai-empty-neutral">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-info-outline"></span></div>
+						<div class="accessai-empty-text">
+							<h4>Live computed focus inspection pending</h4>
+							<p>Click <strong>Scan Page (10 Checkpoints)</strong> to evaluate computed focus styles and outline suppression across all interactive controls.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>Visible keyboard focus indicators verified</h4>
+							<p>Interactive elements display clear, visible outlines or distinct focus rings when navigating by keyboard.</p>
+						</div>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     10. TABLE ACCESSIBILITY
+			     ============================================================ -->
+			<div class="accessai-section">
+				<div class="accessai-section-header">
+					<div class="accessai-section-title-wrap">
+						<div class="accessai-section-icon-chip accessai-icon-tables">
+							<span class="dashicons dashicons-editor-table"></span>
+						</div>
+						<div>
+							<h2>10. Data Table Structure &amp; Relationships</h2>
+							<p class="accessai-wcag-ref">WCAG 2.1 Guideline 1.3.1 Info and Relationships (Level A)</p>
+						</div>
+					</div>
+					<div>
+						<?php if ( empty( $table_issues ) ) : ?>
+							<span class="accessai-chip-pill accessai-chip-pass">✓ Semantic Tables</span>
+						<?php else : ?>
+							<span class="accessai-chip-pill accessai-chip-warn"><?php echo esc_html( count( $table_issues ) ); ?> Table Defects</span>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php if ( empty( $table_issues ) ) : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>All tables properly structured</h4>
+							<p>Data tables feature appropriate header cells (<code>&lt;th&gt;</code>) and header scope associations.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-table-card">
+						<table class="accessai-table" id="accessai-table-table"
+							   data-issues="<?php echo esc_attr( wp_json_encode( $table_issues_json ) ); ?>">
+							<thead>
+								<tr>
+									<th>Issue</th>
+									<th>Detection Status</th>
+									<th>Table Element</th>
+									<th>Description</th>
+									<th class="accessai-ai-col">AI Explanation &amp; Fix</th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $table_issues as $t_issue ) :
+									$t_status_class = ( ( $t_issue['status'] ?? '' ) === 'Verified Failure' )
+										? 'accessai-status-failure'
+										: ( ( $t_issue['status'] ?? '' ) === 'Potential Issue' ? 'accessai-status-potential' : 'accessai-status-manual' );
+									$fp = md5( 'tables|' . ( $t_issue['type'] ?? '' ) . '|' . ( $t_issue['element'] ?? '' ) . '|' . ( $t_issue['table_summary'] ?? '' ) );
+								?>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
+										<td><strong><?php echo esc_html( $t_issue['type'] ?? 'Table Finding' ); ?></strong></td>
+										<td><span class="accessai-status-badge <?php echo esc_attr( $t_status_class ); ?>"><?php echo esc_html( $t_issue['status'] ?? 'Verified Failure' ); ?></span></td>
+										<td class="accessai-wrap-col">
+											<?php echo wp_kses_post( $t_issue['element'] ?? '' ); ?>
+											<?php if ( ! empty( $t_issue['table_summary'] ) ) : ?>
+												<div class="accessai-subcontext"><?php echo esc_html( $t_issue['table_summary'] ); ?></div>
+											<?php endif; ?>
+										</td>
+										<td class="accessai-wrap-col"><?php echo esc_html( $t_issue['message'] ?? '' ); ?></td>
 										<td class="accessai-ai-cell">
 											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
 										</td>
@@ -649,8 +1229,8 @@ function accessai_render_dashboard() {
 }
 
 /**
- * Build issue data arrays suitable for auto-explain JS consumption.
- * Each item gets a fingerprint, type, and salient details string.
+ * Build issue data arrays suitable for auto-explain JS consumption across all 10 categories.
+ * Each item receives a unique deterministic MD5 fingerprint and salient details string.
  */
 function accessai_build_issue_data( $issues, $type ) {
 	$data = array();
@@ -687,6 +1267,54 @@ function accessai_build_issue_data( $issues, $type ) {
 				$fp_key  = 'color_contrast|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['text'] ?? '' ) . '|' . ( $issue['ratio'] ?? '' );
 				break;
 
+			case 'keyboard':
+				$details = 'Keyboard Finding: ' . ( $issue['type'] ?? '' ) .
+					'. Element: ' . strip_tags( $issue['element'] ?? '' ) .
+					'. Context: ' . ( $issue['context'] ?? '' ) .
+					'. Message: ' . ( $issue['message'] ?? '' );
+				$fp_key  = 'keyboard|' . ( $issue['type'] ?? '' ) . '|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['context'] ?? '' );
+				break;
+
+			case 'links':
+				$details = 'Link Finding: ' . ( $issue['type'] ?? '' ) .
+					'. Link text: ' . ( $issue['link_text'] ?? '' ) .
+					'. Destination URL: ' . ( $issue['link_url'] ?? '' ) .
+					'. Message: ' . ( $issue['message'] ?? '' );
+				$fp_key  = 'links|' . ( $issue['type'] ?? '' ) . '|' . ( $issue['link_url'] ?? '' ) . '|' . ( $issue['link_text'] ?? '' );
+				break;
+
+			case 'buttons':
+				$details = 'Button Finding: ' . ( $issue['type'] ?? '' ) .
+					'. Button: ' . strip_tags( $issue['element'] ?? '' ) .
+					'. Text: ' . ( $issue['button_text'] ?? '' ) .
+					'. Message: ' . ( $issue['message'] ?? '' );
+				$fp_key  = 'buttons|' . ( $issue['type'] ?? '' ) . '|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['button_text'] ?? '' );
+				break;
+
+			case 'text_spacing':
+				$details = 'Text Spacing Finding: ' . ( $issue['type'] ?? '' ) .
+					'. Element: ' . ( $issue['element'] ?? '' ) .
+					'. Sample: ' . ( $issue['sample'] ?? '' ) .
+					'. Metrics: ' . ( $issue['metrics'] ?? '' );
+				$fp_key  = 'text_spacing|' . ( $issue['type'] ?? '' ) . '|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['sample'] ?? '' );
+				break;
+
+			case 'focus':
+				$details = 'Focus Visibility Finding: ' . ( $issue['type'] ?? '' ) .
+					'. Element: ' . ( $issue['element'] ?? '' ) .
+					'. Target: ' . ( $issue['target_text'] ?? '' ) .
+					'. Style: ' . ( $issue['focus_style'] ?? '' );
+				$fp_key  = 'focus|' . ( $issue['type'] ?? '' ) . '|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['target_text'] ?? '' );
+				break;
+
+			case 'tables':
+				$details = 'Table Finding: ' . ( $issue['type'] ?? '' ) .
+					'. Element: ' . strip_tags( $issue['element'] ?? '' ) .
+					'. Summary: ' . ( $issue['table_summary'] ?? '' ) .
+					'. Message: ' . ( $issue['message'] ?? '' );
+				$fp_key  = 'tables|' . ( $issue['type'] ?? '' ) . '|' . ( $issue['element'] ?? '' ) . '|' . ( $issue['table_summary'] ?? '' );
+				break;
+
 			default:
 				continue 2;
 		}
@@ -703,7 +1331,8 @@ function accessai_build_issue_data( $issues, $type ) {
 }
 
 /**
- * AJAX: Save contrast scan results sent from the scan iframe.
+ * AJAX: Save browser audit scan results sent from the scan iframe across checkpoints.
+ * Handles both legacy flat arrays and multi-module payload dictionaries.
  */
 add_action( 'wp_ajax_accessai_save_contrast_results', 'accessai_save_contrast_results' );
 
@@ -718,16 +1347,125 @@ function accessai_save_contrast_results() {
 	$results     = json_decode( $raw_results, true );
 
 	if ( ! is_array( $results ) ) {
-		wp_send_json_error( array( 'message' => 'Invalid scan results.' ), 400 );
+		wp_send_json_error( array( 'message' => 'Invalid scan results payload.' ), 400 );
 	}
 
-	$safe_results = array();
+	$user_id = get_current_user_id();
 
+	// Check if this is the multi-module payload (contrast, focus, text_spacing, keyboard)
+	if ( isset( $results['contrast'] ) || isset( $results['focus'] ) || isset( $results['text_spacing'] ) || isset( $results['keyboard'] ) ) {
+		$safe_contrast = array();
+		if ( ! empty( $results['contrast'] ) && is_array( $results['contrast'] ) ) {
+			foreach ( array_slice( $results['contrast'], 0, 100 ) as $c ) {
+				if ( is_array( $c ) ) {
+					$safe_contrast[] = array(
+						'element'  => sanitize_text_field( $c['element'] ?? '' ),
+						'text'     => sanitize_text_field( $c['text'] ?? '' ),
+						'ratio'    => sanitize_text_field( $c['ratio'] ?? '' ),
+						'required' => sanitize_text_field( $c['required'] ?? '' ),
+					);
+				}
+			}
+		}
+
+		$safe_focus = array();
+		if ( ! empty( $results['focus'] ) && is_array( $results['focus'] ) ) {
+			foreach ( array_slice( $results['focus'], 0, 50 ) as $f ) {
+				if ( is_array( $f ) ) {
+					$safe_focus[] = array(
+						'type'        => sanitize_text_field( $f['type'] ?? 'Focus Finding' ),
+						'status'      => sanitize_text_field( $f['status'] ?? 'Verified Failure' ),
+						'severity'    => sanitize_text_field( $f['severity'] ?? 'High' ),
+						'element'     => sanitize_text_field( $f['element'] ?? '' ),
+						'target_text' => sanitize_text_field( $f['target_text'] ?? '' ),
+						'focus_style' => sanitize_text_field( $f['focus_style'] ?? '' ),
+						'message'     => sanitize_text_field( $f['message'] ?? '' ),
+						'remediation' => sanitize_text_field( $f['remediation'] ?? '' ),
+					);
+				}
+			}
+		}
+
+		$safe_text_spacing = array();
+		if ( ! empty( $results['text_spacing'] ) && is_array( $results['text_spacing'] ) ) {
+			foreach ( array_slice( $results['text_spacing'], 0, 50 ) as $ts ) {
+				if ( is_array( $ts ) ) {
+					$safe_text_spacing[] = array(
+						'type'        => sanitize_text_field( $ts['type'] ?? 'Text Spacing Finding' ),
+						'status'      => sanitize_text_field( $ts['status'] ?? 'Verified Failure' ),
+						'severity'    => sanitize_text_field( $ts['severity'] ?? 'High' ),
+						'element'     => sanitize_text_field( $ts['element'] ?? '' ),
+						'sample'      => sanitize_text_field( $ts['sample'] ?? '' ),
+						'metrics'     => sanitize_text_field( $ts['metrics'] ?? '' ),
+						'message'     => sanitize_text_field( $ts['message'] ?? '' ),
+						'remediation' => sanitize_text_field( $ts['remediation'] ?? '' ),
+					);
+				}
+			}
+		}
+
+		$safe_keyboard = array();
+		if ( ! empty( $results['keyboard'] ) && is_array( $results['keyboard'] ) ) {
+			foreach ( array_slice( $results['keyboard'], 0, 50 ) as $kb ) {
+				if ( is_array( $kb ) ) {
+					$safe_keyboard[] = array(
+						'type'        => sanitize_text_field( $kb['type'] ?? 'Keyboard Finding' ),
+						'status'      => sanitize_text_field( $kb['status'] ?? 'Verified Failure' ),
+						'severity'    => sanitize_text_field( $kb['severity'] ?? 'High' ),
+						'element'     => sanitize_text_field( $kb['element'] ?? '' ),
+						'context'     => sanitize_text_field( $kb['context'] ?? '' ),
+						'message'     => sanitize_text_field( $kb['message'] ?? '' ),
+						'remediation' => sanitize_text_field( $kb['remediation'] ?? '' ),
+					);
+				}
+			}
+		}
+
+		$safe_buttons = array();
+		if ( ! empty( $results['buttons'] ) && is_array( $results['buttons'] ) ) {
+			foreach ( array_slice( $results['buttons'], 0, 50 ) as $b ) {
+				if ( is_array( $b ) ) {
+					$safe_buttons[] = array(
+						'type'        => sanitize_text_field( $b['type'] ?? 'Button Without Accessible Name' ),
+						'status'      => sanitize_text_field( $b['status'] ?? 'Verified Failure' ),
+						'severity'    => sanitize_text_field( $b['severity'] ?? 'High' ),
+						'element'     => sanitize_text_field( $b['element'] ?? '' ),
+						'selector'    => sanitize_text_field( $b['selector'] ?? '' ),
+						'button_text' => sanitize_text_field( $b['button_text'] ?? '(empty)' ),
+						'message'     => sanitize_text_field( $b['message'] ?? '' ),
+						'remediation' => sanitize_text_field( $b['remediation'] ?? '' ),
+					);
+				}
+			}
+		}
+
+		set_transient( 'accessai_contrast_results_' . $user_id, $safe_contrast, HOUR_IN_SECONDS );
+		set_transient( 'accessai_focus_results_' . $user_id, $safe_focus, HOUR_IN_SECONDS );
+		set_transient( 'accessai_text_spacing_results_' . $user_id, $safe_text_spacing, HOUR_IN_SECONDS );
+		set_transient( 'accessai_browser_keyboard_results_' . $user_id, $safe_keyboard, HOUR_IN_SECONDS );
+		set_transient( 'accessai_browser_button_results_' . $user_id, $safe_buttons, HOUR_IN_SECONDS );
+		set_transient( 'accessai_contrast_scan_completed_' . $user_id, true, HOUR_IN_SECONDS );
+
+		wp_send_json_success(
+			array(
+				'message' => 'All browser audit results received.',
+				'counts'  => array(
+					'contrast'     => count( $safe_contrast ),
+					'focus'        => count( $safe_focus ),
+					'text_spacing' => count( $safe_text_spacing ),
+					'keyboard'     => count( $safe_keyboard ),
+					'buttons'      => count( $safe_buttons ),
+				),
+			)
+		);
+	}
+
+	// Legacy fallback: single list of contrast results
+	$safe_results = array();
 	foreach ( array_slice( $results, 0, 500 ) as $result ) {
 		if ( ! is_array( $result ) ) {
 			continue;
 		}
-
 		$safe_results[] = array(
 			'element'  => sanitize_text_field( $result['element'] ?? '' ),
 			'text'     => sanitize_text_field( $result['text'] ?? '' ),
@@ -735,8 +1473,6 @@ function accessai_save_contrast_results() {
 			'required' => sanitize_text_field( $result['required'] ?? '' ),
 		);
 	}
-
-	$user_id = get_current_user_id();
 
 	set_transient( 'accessai_contrast_results_' . $user_id, $safe_results, HOUR_IN_SECONDS );
 	set_transient( 'accessai_contrast_scan_completed_' . $user_id, true, HOUR_IN_SECONDS );
@@ -750,7 +1486,7 @@ function accessai_save_contrast_results() {
 }
 
 /**
- * AJAX: Clear stored contrast scan results for the current user.
+ * AJAX: Clear all stored audit scan results for the current user across checkpoints.
  */
 add_action( 'wp_ajax_accessai_clear_contrast_results', 'accessai_clear_contrast_results' );
 
@@ -764,8 +1500,12 @@ function accessai_clear_contrast_results() {
 	$user_id = get_current_user_id();
 
 	delete_transient( 'accessai_contrast_results_' . $user_id );
+	delete_transient( 'accessai_focus_results_' . $user_id );
+	delete_transient( 'accessai_text_spacing_results_' . $user_id );
+	delete_transient( 'accessai_browser_keyboard_results_' . $user_id );
+	delete_transient( 'accessai_browser_button_results_' . $user_id );
 	delete_transient( 'accessai_contrast_scan_completed_' . $user_id );
 	delete_user_meta( $user_id, '_accessai_scanned_page_id' );
 
-	wp_send_json_success( array( 'message' => 'Audit results cleared.' ) );
+	wp_send_json_success( array( 'message' => 'All audit results cleared.' ) );
 }

@@ -514,7 +514,7 @@
                 scoreBg = "#eff6ff"; scoreColor = "#2563eb"; scoreBorder = "#3b82f6"; badgeBg = "#dbeafe"; badgeColor = "#1e40af";
             }
 
-            // Gather Alt Text findings
+            // Gather findings from all 10 category tables
             var altRows = document.querySelectorAll("#accessai-alt-table tbody tr");
             var altIssues = [];
             altRows.forEach(function (r) {
@@ -522,15 +522,13 @@
                 if (cols.length >= 4) {
                     altIssues.push({
                         type: cleanText(cols[0]),
-                        severity: cleanText(cols[1]),
-                        page: cleanText(cols[2]),
-                        src: cleanText(cols[3]),
+                        status: cleanText(cols[1]),
+                        src: cleanText(cols[2]),
                         ai: getAiText(r) || "Add an informative, contextual alt attribute describing the image content or purpose."
                     });
                 }
             });
 
-            // Gather Heading findings
             var headingRows = document.querySelectorAll("#accessai-heading-table tbody tr");
             var headingIssues = [];
             headingRows.forEach(function (r) {
@@ -538,7 +536,7 @@
                 if (cols.length >= 4) {
                     headingIssues.push({
                         type: cleanText(cols[0]),
-                        page: cleanText(cols[1]),
+                        status: cleanText(cols[1]),
                         transition: cleanText(cols[2]),
                         text: cleanText(cols[3]),
                         ai: getAiText(r) || "Structure headings hierarchically (e.g., H1 followed by H2, then H3) without skipping levels."
@@ -546,7 +544,6 @@
                 }
             });
 
-            // Gather Form Label findings
             var formRows = document.querySelectorAll("#accessai-form-table tbody tr");
             var formIssues = [];
             formRows.forEach(function (r) {
@@ -554,7 +551,7 @@
                 if (cols.length >= 4) {
                     formIssues.push({
                         type: cleanText(cols[0]),
-                        page: cleanText(cols[1]),
+                        status: cleanText(cols[1]),
                         control: cleanText(cols[2]),
                         field: cleanText(cols[3]),
                         ai: getAiText(r) || "Associate a descriptive <label for='...'> or aria-label attribute with this form control."
@@ -562,18 +559,109 @@
                 }
             });
 
-            // Gather Color Contrast findings
             var contrastRows = document.querySelectorAll("#accessai-contrast-table tbody tr");
             var contrastIssues = [];
             contrastRows.forEach(function (r) {
                 var cols = r.querySelectorAll("td");
-                if (cols.length >= 4) {
+                if (cols.length >= 5) {
                     contrastIssues.push({
                         element: cleanText(cols[0]),
-                        sample: cleanText(cols[1]),
-                        ratio: cleanText(cols[2]),
-                        required: cleanText(cols[3]),
-                        ai: getAiText(r) || "Increase luminance contrast between foreground text and background to at least 4.5:1."
+                        status: cleanText(cols[1]),
+                        sample: cleanText(cols[2]),
+                        ratio: cleanText(cols[3]),
+                        required: cleanText(cols[4]),
+                        ai: getAiText(r) || "Increase luminance contrast between foreground text and background to meet WCAG AA requirements."
+                    });
+                }
+            });
+
+            var keyboardRows = document.querySelectorAll("#accessai-keyboard-table tbody tr");
+            var keyboardIssues = [];
+            keyboardRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    keyboardIssues.push({
+                        type: cleanText(cols[0]),
+                        status: cleanText(cols[1]),
+                        element: cleanText(cols[2]),
+                        message: cleanText(cols[3]),
+                        ai: getAiText(r) || "Ensure all interactive elements are reachable via Tab key without positive tabindex or focus traps."
+                    });
+                }
+            });
+
+            var linkRows = document.querySelectorAll("#accessai-link-table tbody tr");
+            var linkIssues = [];
+            linkRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    linkIssues.push({
+                        type: cleanText(cols[0]),
+                        status: cleanText(cols[1]),
+                        text: cleanText(cols[2]),
+                        url: cleanText(cols[3]),
+                        ai: getAiText(r) || "Provide descriptive anchor text that explains the destination out of context or add an aria-label."
+                    });
+                }
+            });
+
+            var buttonRows = document.querySelectorAll("#accessai-button-table tbody tr");
+            var buttonIssues = [];
+            buttonRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    buttonIssues.push({
+                        type: cleanText(cols[0]),
+                        status: cleanText(cols[1]),
+                        element: cleanText(cols[2]),
+                        message: cleanText(cols[3]),
+                        ai: getAiText(r) || "Provide an accessible name using visible text, aria-label, or descriptive alt text on enclosed icons."
+                    });
+                }
+            });
+
+            var textSpacingRows = document.querySelectorAll("#accessai-text-spacing-table tbody tr");
+            var textSpacingIssues = [];
+            textSpacingRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 5) {
+                    textSpacingIssues.push({
+                        type: cleanText(cols[0]),
+                        status: cleanText(cols[1]),
+                        element: cleanText(cols[2]),
+                        sample: cleanText(cols[3]),
+                        metrics: cleanText(cols[4]),
+                        ai: getAiText(r) || "Allow containers to expand fluidly with min-height and relative units to accommodate 200% text resize and spacing."
+                    });
+                }
+            });
+
+            var focusRows = document.querySelectorAll("#accessai-focus-table tbody tr");
+            var focusIssues = [];
+            focusRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    focusIssues.push({
+                        type: cleanText(cols[0]),
+                        status: cleanText(cols[1]),
+                        element: cleanText(cols[2]),
+                        style: cleanText(cols[3]),
+                        ai: getAiText(r) || "Do not suppress outline without providing an equivalent visible focus ring with at least 3:1 contrast."
+                    });
+                }
+            });
+
+            var tableRows = document.querySelectorAll("#accessai-table-table tbody tr");
+            var tableIssues = [];
+            tableRows.forEach(function (r) {
+                var cols = r.querySelectorAll("td");
+                if (cols.length >= 4) {
+                    tableIssues.push({
+                        type: cleanText(cols[0]),
+                        status: cleanText(cols[1]),
+                        element: cleanText(cols[2]),
+                        message: cleanText(cols[3]),
+                        ai: getAiText(r) || "Designate table headers using <th> tags with appropriate scope attributes (scope='col' or scope='row')."
                     });
                 }
             });
@@ -593,12 +681,12 @@
             overlay.innerHTML = '<div style="background: #ffffff; border-radius: 16px; padding: 32px 36px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 400px; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;">' +
                 '<div style="width: 52px; height: 52px; border-radius: 14px; background: #fee2e2; color: #ef4444; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;"><span class="dashicons dashicons-pdf" style="font-size: 28px; width: 28px; height: 28px; line-height: 1;"></span></div>' +
                 '<h3 style="margin: 0 0 6px; font-size: 17px; font-weight: 700; color: #0f172a;">Generating Audit PDF</h3>' +
-                '<p style="margin: 0 0 16px; font-size: 12px; color: #64748b; line-height: 1.4;">Formatting WCAG compliance tables and scorecards&hellip;</p>' +
-                '<div style="display: inline-flex; align-items: center; gap: 8px; color: #4f46e5; font-size: 12px; font-weight: 600;"><span class="dashicons dashicons-update accessai-spin"></span> Assembling pages&hellip;</div>' +
+                '<p style="margin: 0 0 16px; font-size: 12px; color: #64748b; line-height: 1.4;">Formatting 10 WCAG compliance checkpoint tables&hellip;</p>' +
+                '<div style="display: inline-flex; align-items: center; gap: 8px; color: #4f46e5; font-size: 12px; font-weight: 600;"><span class="dashicons dashicons-update accessai-spin"></span> Assembling report&hellip;</div>' +
                 '</div>';
             document.body.appendChild(overlay);
 
-            // Offscreen wrapper with opacity 1 so html2canvas renders, but clipped out of user view
+            // Offscreen wrapper
             var wrapper = document.createElement("div");
             wrapper.id = "accessai-pdf-wrapper";
             wrapper.style.position = "absolute";
@@ -618,7 +706,7 @@
             container.style.background = "#ffffff";
             container.style.color = "#1e293b";
             container.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-            container.style.fontSize = "11px";
+            container.style.fontSize = "10.5px";
             container.style.lineHeight = "1.45";
             container.style.padding = "18px 20px";
             container.style.boxSizing = "border-box";
@@ -626,109 +714,129 @@
             var html = "";
 
             /* 1. Header Banner */
-            html += '<div style="background-color: #0f172a; border-radius: 12px; padding: 18px 20px; color: #ffffff; margin-bottom: 18px; box-sizing: border-box;">';
-            html += '  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">';
+            html += '<div style="background-color: #0f172a; border-radius: 12px; padding: 18px 20px; color: #ffffff; margin-bottom: 14px; box-sizing: border-box;">';
+            html += '  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">';
             html += '    <div>';
             html += '      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">';
-            html += '        <span style="background: #4f46e5; color: #ffffff; font-weight: 800; font-size: 13px; padding: 3px 8px; border-radius: 6px; letter-spacing: 0.5px;">AccessAI</span>';
-            html += '        <span style="font-size: 10px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">Accessibility Audit Report</span>';
+            html += '        <span style="background: #4f46e5; color: #ffffff; font-weight: 800; font-size: 12px; padding: 3px 8px; border-radius: 6px;">AccessAI</span>';
+            html += '        <span style="font-size: 9.5px; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;">10-Category Audit Report</span>';
             html += '      </div>';
-            html += '      <h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: -0.01em;">WCAG 2.1 Compliance Assessment</h1>';
+            html += '      <h1 style="margin: 0; font-size: 17px; font-weight: 700; color: #ffffff;">WCAG 2.1 Compliance Assessment</h1>';
             html += '    </div>';
             html += '    <div style="text-align: right;">';
-            html += '      <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 5px 10px; display: inline-block;">';
-            html += '        <div style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Generated</div>';
-            html += '        <div style="font-size: 10.5px; font-weight: 600; color: #ffffff;">' + esc(dateStr) + ' &bull; ' + esc(timeStr) + '</div>';
+            html += '      <div style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 4px 8px; display: inline-block;">';
+            html += '        <div style="font-size: 8.5px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Generated</div>';
+            html += '        <div style="font-size: 10px; font-weight: 600; color: #ffffff;">' + esc(dateStr) + ' &bull; ' + esc(timeStr) + '</div>';
             html += '      </div>';
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div style="display: flex; gap: 12px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 10px; font-size: 10.5px;">';
+            html += '  <div style="display: flex; gap: 10px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 8px; font-size: 10px;">';
             html += '    <div style="flex: 2;">';
-            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.05em;">Audited Target</span>';
-            html += '      <strong style="color: #ffffff; font-size: 12px;">' + esc(pageTitle) + '</strong>';
-            html += '      <span style="color: #cbd5e1; display: block; font-size: 9.5px; word-break: break-all;">' + esc(pageUrl) + '</span>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8px;">Audited Target</span>';
+            html += '      <strong style="color: #ffffff; font-size: 11px;">' + esc(pageTitle) + '</strong>';
+            html += '      <span style="color: #cbd5e1; display: block; font-size: 9px; word-break: break-all;">' + esc(pageUrl) + '</span>';
             html += '    </div>';
             html += '    <div style="flex: 1;">';
-            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.05em;">Compliance Standard</span>';
-            html += '      <strong style="color: #ffffff; font-size: 11.5px;">WCAG 2.1 Level AA</strong>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8px;">Standard Evaluated</span>';
+            html += '      <strong style="color: #ffffff; font-size: 11px;">WCAG 2.1 (A &amp; AA)</strong>';
             html += '    </div>';
             html += '    <div style="flex: 1;">';
-            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.05em;">Audit Engine</span>';
-            html += '      <strong style="color: #ffffff; font-size: 11.5px;">AccessAI Engine v1.2</strong>';
+            html += '      <span style="color: #94a3b8; display: block; font-weight: 600; text-transform: uppercase; font-size: 8px;">Checkpoints</span>';
+            html += '      <strong style="color: #ffffff; font-size: 11px;">10 Categories</strong>';
             html += '    </div>';
             html += '  </div>';
+            html += '</div>';
+
+            /* Disclaimer notice */
+            html += '<div style="background: #f1f5f9; border-left: 3px solid #64748b; border-radius: 6px; padding: 7px 10px; margin-bottom: 12px; font-size: 8.5px; color: #475569; line-height: 1.4;">';
+            html += '  <strong>Compliance Benchmark Notice:</strong> This score represents an automated assessment benchmark across 10 measurable WCAG 2.1 AA criteria. Automated testing cannot detect all subjective barriers and does not constitute legal proof of full WCAG conformance.';
             html += '</div>';
 
             /* 2. Executive Scorecard & Metrics */
-            html += '<div style="display: flex; gap: 10px; margin-bottom: 18px; page-break-inside: avoid; break-inside: avoid;">';
-            html += '  <div style="flex: 1.25; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; box-sizing: border-box;">';
-            html += '    <div style="width: 52px; height: 52px; border-radius: 50%; background: ' + scoreBg + '; color: ' + scoreColor + '; border: 3px solid ' + scoreBorder + '; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">';
-            html += '      <span style="font-size: 19px; line-height: 1;">' + esc(score) + '</span>';
-            html += '      <span style="font-size: 8px; opacity: 0.85;">/100</span>';
+            html += '<div style="display: flex; gap: 8px; margin-bottom: 14px; page-break-inside: avoid; break-inside: avoid;">';
+            html += '  <div style="flex: 1.1; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; box-sizing: border-box;">';
+            html += '    <div style="width: 46px; height: 46px; border-radius: 50%; background: ' + scoreBg + '; color: ' + scoreColor + '; border: 3px solid ' + scoreBorder + '; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;">';
+            html += '      <span style="font-size: 17px; line-height: 1;">' + esc(score) + '</span>';
+            html += '      <span style="font-size: 7.5px; opacity: 0.85;">/100</span>';
             html += '    </div>';
             html += '    <div>';
-            html += '      <div style="font-size: 8.5px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Accessibility Score</div>';
-            html += '      <div style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 1px 0;">' + esc(scoreLabel) + '</div>';
-            html += '      <div style="font-size: 9.5px; color: #64748b;">' + esc(passedChecks) + ' of ' + esc(totalChecks) + ' Criteria Passing</div>';
+            html += '      <div style="font-size: 8px; text-transform: uppercase; font-weight: 700; color: #64748b;">Accessibility Score</div>';
+            html += '      <div style="font-size: 13.5px; font-weight: 800; color: #0f172a; margin: 1px 0;">' + esc(scoreLabel) + '</div>';
+            html += '      <div style="font-size: 8.5px; color: #64748b;">' + esc(passedChecks) + ' of ' + esc(totalChecks) + ' Criteria Passing</div>';
             html += '    </div>';
             html += '  </div>';
 
-            html += '  <div style="flex: 0.95; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; box-sizing: border-box;">';
-            html += '    <div style="font-size: 8.5px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em;">Total Violations</div>';
-            html += '    <div style="font-size: 22px; font-weight: 800; color: ' + (parseInt(totalIssues, 10) > 0 ? '#dc2626' : '#059669') + '; margin: 1px 0;">' + esc(totalIssues) + '</div>';
-            html += '    <div style="font-size: 9.5px; color: #64748b;">Actionable items detected</div>';
+            html += '  <div style="flex: 0.85; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; box-sizing: border-box;">';
+            html += '    <div style="font-size: 8px; text-transform: uppercase; font-weight: 700; color: #64748b;">Total Findings</div>';
+            html += '    <div style="font-size: 20px; font-weight: 800; color: ' + (parseInt(totalIssues, 10) > 0 ? '#dc2626' : '#059669') + '; margin: 1px 0;">' + esc(totalIssues) + '</div>';
+            html += '    <div style="font-size: 8.5px; color: #64748b;">Across 10 categories</div>';
             html += '  </div>';
 
-            html += '  <div style="flex: 1.15; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; font-size: 9.5px; box-sizing: border-box;">';
-            html += '    <div style="font-size: 8.5px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.06em; margin-bottom: 4px;">Findings Breakdown</div>';
-            html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Image Alt Text:</span> <strong style="color: ' + (altIssues.length ? '#dc2626' : '#059669') + ';">' + altIssues.length + '</strong></div>';
-            html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Heading Hierarchy:</span> <strong style="color: ' + (headingIssues.length ? '#dc2626' : '#059669') + ';">' + headingIssues.length + '</strong></div>';
-            html += '    <div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span style="color: #475569;">Form Labels:</span> <strong style="color: ' + (formIssues.length ? '#dc2626' : '#059669') + ';">' + formIssues.length + '</strong></div>';
-            html += '    <div style="display: flex; justify-content: space-between;"><span style="color: #475569;">Color Contrast:</span> <strong style="color: ' + (contrastIssues.length ? '#dc2626' : '#059669') + ';">' + contrastIssues.length + '</strong></div>';
+            html += '  <div style="flex: 1.5; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; font-size: 8px; box-sizing: border-box;">';
+            html += '    <div style="font-size: 8px; text-transform: uppercase; font-weight: 700; color: #64748b; margin-bottom: 3px;">10-Category Summary</div>';
+            html += '    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px;">';
+            html += '      <div>Alt Text: <strong style="color:' + (altIssues.length ? '#dc2626' : '#059669') + ';">' + altIssues.length + '</strong></div>';
+            html += '      <div>Headings: <strong style="color:' + (headingIssues.length ? '#dc2626' : '#059669') + ';">' + headingIssues.length + '</strong></div>';
+            html += '      <div>Form Labels: <strong style="color:' + (formIssues.length ? '#dc2626' : '#059669') + ';">' + formIssues.length + '</strong></div>';
+            html += '      <div>Contrast: <strong style="color:' + (contrastIssues.length ? '#dc2626' : '#059669') + ';">' + contrastIssues.length + '</strong></div>';
+            html += '      <div>Keyboard: <strong style="color:' + (keyboardIssues.length ? '#dc2626' : '#059669') + ';">' + keyboardIssues.length + '</strong></div>';
+            html += '      <div>Links: <strong style="color:' + (linkIssues.length ? '#dc2626' : '#059669') + ';">' + linkIssues.length + '</strong></div>';
+            html += '      <div>Buttons: <strong style="color:' + (buttonIssues.length ? '#dc2626' : '#059669') + ';">' + buttonIssues.length + '</strong></div>';
+            html += '      <div>Text Spacing: <strong style="color:' + (textSpacingIssues.length ? '#dc2626' : '#059669') + ';">' + textSpacingIssues.length + '</strong></div>';
+            html += '      <div>Focus Visible: <strong style="color:' + (focusIssues.length ? '#dc2626' : '#059669') + ';">' + focusIssues.length + '</strong></div>';
+            html += '      <div>Tables: <strong style="color:' + (tableIssues.length ? '#dc2626' : '#059669') + ';">' + tableIssues.length + '</strong></div>';
+            html += '    </div>';
             html += '  </div>';
             html += '</div>';
 
-            /* Helper function for category sections */
+            /* Helper functions for category sections */
             function renderSectionHeader(title, wcag, count, isPassText) {
-                var s = '<div style="display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #4f46e5; padding-left: 10px; margin: 16px 0 8px; box-sizing: border-box;">';
+                var s = '<div style="display: flex; justify-content: space-between; align-items: center; border-left: 3px solid #4f46e5; padding-left: 8px; margin: 12px 0 6px; box-sizing: border-box;">';
                 s += '  <div>';
-                s += '    <h3 style="margin: 0; font-size: 12.5px; font-weight: 700; color: #0f172a;">' + esc(title) + '</h3>';
-                s += '    <div style="font-size: 8.5px; color: #64748b;">' + esc(wcag) + '</div>';
+                s += '    <h3 style="margin: 0; font-size: 11.5px; font-weight: 700; color: #0f172a;">' + esc(title) + '</h3>';
+                s += '    <div style="font-size: 8px; color: #64748b;">' + esc(wcag) + '</div>';
                 s += '  </div>';
                 if (count === 0) {
-                    s += '  <span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 8px; font-size: 9px; font-weight: 700; white-space: nowrap;">' + esc(isPassText || '✓ All Clear') + '</span>';
+                    s += '  <span style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 999px; padding: 2px 7px; font-size: 8px; font-weight: 700;">' + esc(isPassText || '✓ All Clear') + '</span>';
                 } else {
-                    s += '  <span style="background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 8px; font-size: 9px; font-weight: 700; white-space: nowrap;">' + count + ' ' + (count === 1 ? 'Issue' : 'Issues') + ' Found</span>';
+                    s += '  <span style="background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 999px; padding: 2px 7px; font-size: 8px; font-weight: 700;">' + count + ' ' + (count === 1 ? 'Finding' : 'Findings') + '</span>';
                 }
                 s += '</div>';
                 return s;
             }
 
             function renderEmptyNotice(msg) {
-                return '<div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; color: #166534; font-size: 9.5px; margin-bottom: 12px; box-sizing: border-box;"><strong>✓ Passed:</strong> ' + esc(msg) + '</div>';
+                return '<div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 10px; color: #166534; font-size: 8.5px; margin-bottom: 8px; box-sizing: border-box;"><strong>✓ Passed:</strong> ' + esc(msg) + '</div>';
+            }
+
+            function renderStatusBadge(status) {
+                var isFailure = (status.indexOf("Failure") !== -1);
+                var isPotential = (status.indexOf("Potential") !== -1);
+                var bg = isFailure ? "#fee2e2" : (isPotential ? "#fef3c7" : "#eff6ff");
+                var color = isFailure ? "#991b1b" : (isPotential ? "#92400e" : "#1d4ed8");
+                return '<span style="background: ' + bg + '; color: ' + color + '; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 7.5px; white-space: nowrap;">' + esc(status) + '</span>';
             }
 
             /* Section 1: Image Alt Text */
             html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
-            html += renderSectionHeader("1. Image Alternative Text Audit", "WCAG 2.1 Guideline 1.1.1 Non-text Content (Level A)", altIssues.length, "✓ All Images Compliant");
+            html += renderSectionHeader("1. Image Alternative Text", "WCAG 2.1 Guideline 1.1.1 Non-text Content (Level A)", altIssues.length, "✓ Compliant");
             if (altIssues.length === 0) {
-                html += renderEmptyNotice("All images examined in this page contain descriptive alternative text for screen readers.");
+                html += renderEmptyNotice("All images examined have valid, descriptive alternative text.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 10%;">Severity</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 32%;">Image Resource</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 18%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 26%;">Image Source</th>';
+                html += '    <th style="padding: 5px 6px; width: 34%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 altIssues.forEach(function (issue, idx) {
-                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
-                    html += '    <td style="padding: 6px 8px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8px; white-space: nowrap;">' + esc(issue.severity) + '</span></td>';
-                    html += '    <td style="padding: 6px 8px; font-family: monospace; font-size: 8px; word-break: break-all; color: #334155;">' + esc(issue.src) + '</td>';
-                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-all; font-family: monospace; font-size: 7.5px;">' + esc(issue.src) + '</td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -737,24 +845,23 @@
 
             /* Section 2: Heading Structure */
             html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
-            html += renderSectionHeader("2. Heading Hierarchy & Structure", "WCAG 2.1 Guideline 1.3.1 Info & Relationships (Level A)", headingIssues.length, "✓ Logical Hierarchy");
+            html += renderSectionHeader("2. Heading Hierarchy & Structure", "WCAG 2.1 Guideline 1.3.1 Info & Relationships (Level A)", headingIssues.length, "✓ Logical Order");
             if (headingIssues.length === 0) {
-                html += renderEmptyNotice("Headings follow a strict logical progression without any skipped heading levels.");
+                html += renderEmptyNotice("Headings follow a strictly sequential descending order without skipped levels.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 14%;">Sequence</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 28%;">Heading Text</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 18%;">Transition</th>';
+                html += '    <th style="padding: 5px 6px; width: 44%;">Heading &amp; Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 headingIssues.forEach(function (issue, idx) {
-                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
-                    html += '    <td style="padding: 6px 8px;"><span style="background: #fef3c7; color: #92400e; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8px; white-space: nowrap;">' + esc(issue.transition) + '</span></td>';
-                    html += '    <td style="padding: 6px 8px; font-style: italic; color: #334155; word-break: break-word;">' + esc(issue.text) + '</td>';
-                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; font-weight: 600;">' + esc(issue.transition) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-word;"><em>' + esc(issue.text) + '</em><div style="color: #3730a3; margin-top: 2px;">' + esc(issue.ai) + '</div></td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -763,24 +870,23 @@
 
             /* Section 3: Form Controls */
             html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
-            html += renderSectionHeader("3. Form Controls & Input Labels", "WCAG 2.1 Guideline 3.3.2 Labels or Instructions (Level A)", formIssues.length, "✓ All Controls Labeled");
+            html += renderSectionHeader("3. Form Controls & Input Labels", "WCAG 2.1 Guideline 3.3.2 Labels or Instructions (Level A)", formIssues.length, "✓ Controls Labeled");
             if (formIssues.length === 0) {
-                html += renderEmptyNotice("All interactive form inputs, selects, and textareas have accessible names and labels.");
+                html += renderEmptyNotice("All interactive form inputs, selects, and textareas have programmatic labels.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 18%;">Issue</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 16%;">Control Type</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 26%;">Field Identifier</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Control Name</th>';
+                html += '    <th style="padding: 5px 6px; width: 40%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 formIssues.forEach(function (issue, idx) {
-                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 6px 8px; font-weight: 700; color: #0f172a;">' + esc(issue.type) + '</td>';
-                    html += '    <td style="padding: 6px 8px;"><span style="background: #f1f5f9; color: #475569; padding: 2px 5px; border-radius: 4px; font-weight: 600; font-size: 8px; white-space: nowrap;">' + esc(issue.control) + '</span></td>';
-                    html += '    <td style="padding: 6px 8px; font-family: monospace; font-size: 8px; color: #334155; word-break: break-word;">' + esc(issue.field) + '</td>';
-                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; font-family: monospace; font-size: 8px;">' + esc(issue.control) + ' (' + esc(issue.field) + ')</td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -789,24 +895,175 @@
 
             /* Section 4: Color Contrast */
             html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
-            html += renderSectionHeader("4. Computed Color Contrast Ratio", "WCAG 2.1 Guideline 1.4.3 Contrast Minimum (Level AA)", contrastIssues.length, "✓ AA Compliant");
+            html += renderSectionHeader("4. Computed Colour Contrast Ratio", "WCAG 2.1 Guideline 1.4.3 Contrast Minimum (Level AA)", contrastIssues.length, "✓ AA Compliant");
             if (contrastIssues.length === 0) {
-                html += renderEmptyNotice("No color contrast violations detected. Tested text elements satisfy WCAG AA minimum 4.5:1 ratio.");
+                html += renderEmptyNotice("Tested text elements meet or exceed WCAG Level AA minimum contrast ratios.");
             } else {
-                html += '<table style="width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; box-sizing: border-box;">';
-                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8.5px; text-transform: uppercase;">';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 22%;">Element Selector</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 22%;">Text Preview</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 16%;">Measured vs Min</th>';
-                html += '    <th style="padding: 6px 8px; border-bottom: 1px solid #cbd5e1; width: 40%;">Remediation Guidance</th>';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 18%;">Element</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 20%;">Text Sample</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Ratio</th>';
+                html += '    <th style="padding: 5px 6px; width: 30%;">Remediation Guidance</th>';
                 html += '  </tr></thead><tbody>';
                 contrastIssues.forEach(function (issue, idx) {
-                    var bg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-                    html += '  <tr style="background: ' + bg + '; border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">';
-                    html += '    <td style="padding: 6px 8px; font-family: monospace; font-size: 8px; color: #0f172a; word-break: break-all;">' + esc(issue.element) + '</td>';
-                    html += '    <td style="padding: 6px 8px; font-style: italic; color: #334155; word-break: break-word;">' + esc(issue.sample) + '</td>';
-                    html += '    <td style="padding: 6px 8px;"><span style="background: #fee2e2; color: #991b1b; padding: 2px 5px; border-radius: 4px; font-weight: 700; font-size: 8px; white-space: nowrap;">' + esc(issue.ratio) + '</span> <span style="color: #64748b; font-size: 8px; white-space: nowrap;">(need ' + esc(issue.required) + ')</span></td>';
-                    html += '    <td style="padding: 6px 8px; color: #3730a3; background: #eef2ff; border-radius: 4px; line-height: 1.35;">' + esc(issue.ai) + '</td>';
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-family: monospace; font-size: 8px;">' + esc(issue.element) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-word;"><em>' + esc(issue.sample) + '</em></td>';
+                    html += '    <td style="padding: 5px 6px;"><strong style="color:#b91c1c;">' + esc(issue.ratio) + '</strong> (need ' + esc(issue.required) + ')</td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 5: Keyboard Accessibility */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("5. Keyboard Accessibility & Trap Prevention", "WCAG 2.1 Guidelines 2.1.1 Keyboard & 2.1.2 No Trap (Level A)", keyboardIssues.length, "✓ Navigable");
+            if (keyboardIssues.length === 0) {
+                html += renderEmptyNotice("Interactive controls are operable via keyboard without positive tabindex disruption or traps.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Finding</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 24%;">Element / Target</th>';
+                html += '    <th style="padding: 5px 6px; width: 38%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                keyboardIssues.forEach(function (issue, idx) {
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-all; font-family: monospace; font-size: 7.5px;">' + esc(issue.element) + '</td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 6: Link Accessibility */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("6. Link Purpose & Context", "WCAG 2.1 Guideline 2.4.4 Link Purpose (In Context) (Level A)", linkIssues.length, "✓ Descriptive Links");
+            if (linkIssues.length === 0) {
+                html += renderEmptyNotice("All anchor links possess clear, contextual purpose without vague link text.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 26%;">Anchor &amp; URL</th>';
+                html += '    <th style="padding: 5px 6px; width: 36%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                linkIssues.forEach(function (issue, idx) {
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-all;"><strong>"' + esc(issue.text) + '"</strong><br><span style="font-size:7.5px;color:#64748b;">' + esc(issue.url) + '</span></td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 7: Button Accessibility */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("7. Button Name, Role & Value", "WCAG 2.1 Guideline 4.1.2 Name, Role, Value (Level A)", buttonIssues.length, "✓ All Buttons Labeled");
+            if (buttonIssues.length === 0) {
+                html += renderEmptyNotice("All buttons and interactive action triggers possess valid accessible names.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 26%;">Element Target</th>';
+                html += '    <th style="padding: 5px 6px; width: 36%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                buttonIssues.forEach(function (issue, idx) {
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-all; font-family: monospace; font-size: 7.5px;">' + esc(issue.element) + '</td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 8: Text Resizing & Spacing */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("8. Text Resizing & Spacing", "WCAG 2.1 Guidelines 1.4.4 & 1.4.12 (Level AA)", textSpacingIssues.length, "✓ Resilient Spacing");
+            if (textSpacingIssues.length === 0) {
+                html += renderEmptyNotice("Content scales to 200% zoom and accommodates WCAG text spacing without clipping.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 26%;">Container &amp; Sample</th>';
+                html += '    <th style="padding: 5px 6px; width: 36%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                textSpacingIssues.forEach(function (issue, idx) {
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-word;"><code>' + esc(issue.element) + '</code><br><em>' + esc(issue.sample) + '</em></td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 9: Focus Visibility */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("9. Focus Visibility Indicators", "WCAG 2.1 Guideline 2.4.7 Focus Visible (Level AA)", focusIssues.length, "✓ Focus Rings Present");
+            if (focusIssues.length === 0) {
+                html += renderEmptyNotice("All interactive elements display clear visible focus rings when navigated via keyboard.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 26%;">Element Target</th>';
+                html += '    <th style="padding: 5px 6px; width: 36%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                focusIssues.forEach(function (issue, idx) {
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-all;"><code>' + esc(issue.element) + '</code> (' + esc(issue.style) + ')</td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
+                    html += '  </tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            /* Section 10: Table Accessibility */
+            html += '<div style="page-break-inside: avoid; break-inside: avoid;">';
+            html += renderSectionHeader("10. Data Table Relationships", "WCAG 2.1 Guideline 1.3.1 Info & Relationships (Level A)", tableIssues.length, "✓ Semantic Tables");
+            if (tableIssues.length === 0) {
+                html += renderEmptyNotice("Data tables feature explicit <th> header cells and valid scope associations.");
+            } else {
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 8px; border: 1px solid #e2e8f0; table-layout: fixed;">';
+                html += '  <thead><tr style="background: #f1f5f9; text-align: left; color: #475569; font-size: 8px;">';
+                html += '    <th style="padding: 5px 6px; width: 22%;">Issue</th>';
+                html += '    <th style="padding: 5px 6px; width: 16%;">Status</th>';
+                html += '    <th style="padding: 5px 6px; width: 26%;">Table Structure</th>';
+                html += '    <th style="padding: 5px 6px; width: 36%;">Remediation Guidance</th>';
+                html += '  </tr></thead><tbody>';
+                tableIssues.forEach(function (issue, idx) {
+                    html += '  <tr style="background: ' + (idx % 2 === 0 ? "#ffffff" : "#f8fafc") + '; border-bottom: 1px solid #e2e8f0;">';
+                    html += '    <td style="padding: 5px 6px; font-weight: 700;">' + esc(issue.type) + '</td>';
+                    html += '    <td style="padding: 5px 6px;">' + renderStatusBadge(issue.status) + '</td>';
+                    html += '    <td style="padding: 5px 6px; word-break: break-all;"><code>' + esc(issue.element) + '</code></td>';
+                    html += '    <td style="padding: 5px 6px; color: #3730a3; background: #eef2ff; word-break: break-word;">' + esc(issue.ai) + '</td>';
                     html += '  </tr>';
                 });
                 html += '</tbody></table>';
@@ -814,20 +1071,21 @@
             html += '</div>';
 
             /* 5. Remediation Roadmap Box */
-            html += '<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; margin-top: 16px; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box;">';
-            html += '  <h4 style="margin: 0 0 5px; font-size: 10.5px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em;">Recommended Remediation Priority</h4>';
-            html += '  <ul style="margin: 0; padding-left: 16px; font-size: 9.5px; color: #475569; line-height: 1.45;">';
-            html += '    <li><strong>Priority 1 (Critical):</strong> Populate missing alt text on all active link images and informational graphics.</li>';
-            html += '    <li><strong>Priority 2 (High):</strong> Ensure every interactive form field has a distinct, programmatic label for assistive technologies.</li>';
-            html += '    <li><strong>Priority 3 (Medium):</strong> Adjust CSS color values on flagged low-contrast elements to achieve the 4.5:1 ratio requirement.</li>';
-            html += '    <li><strong>Priority 4 (Structural):</strong> Maintain continuous H1 &rarr; H2 &rarr; H3 heading hierarchy for proper screen reader landmark navigation.</li>';
+            html += '<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box;">';
+            html += '  <h4 style="margin: 0 0 4px; font-size: 9.5px; font-weight: 700; color: #0f172a; text-transform: uppercase;">10-Checkpoint Remediation Roadmap</h4>';
+            html += '  <ul style="margin: 0; padding-left: 14px; font-size: 8.5px; color: #475569; line-height: 1.4;">';
+            html += '    <li><strong>Priority 1 (Critical Operability):</strong> Restore visible keyboard focus rings (outline/box-shadow) and ensure all custom interactive elements receive Tab focus.</li>';
+            html += '    <li><strong>Priority 2 (High Names & Content):</strong> Supply descriptive alternative text on all active link images and accessible names on all icon buttons.</li>';
+            html += '    <li><strong>Priority 3 (Medium Sensory & Layout):</strong> Adjust low-contrast colors to achieve 4.5:1 ratio and eliminate fixed height containers that clip resized text.</li>';
+            html += '    <li><strong>Priority 4 (Structure & Semantics):</strong> Provide consecutive heading levels (H1 &rarr; H2 &rarr; H3) and add <code>&lt;th scope="col"&gt;</code> to data tables.</li>';
             html += '  </ul>';
             html += '</div>';
 
             /* 6. Document Footer */
-            html += '<div style="border-top: 1px solid #e2e8f0; margin-top: 16px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8.5px; color: #94a3b8; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box;">';
-            html += '  <span>AccessAI Automated WCAG Compliance Engine &bull; WordPress Accessibility Suite</span>';
-            html += '  <span>Confidential &bull; Page 1 of Audit Report</span>';
+            html += '<div style="border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top: 8px; display: flex; justify-content: space-between; font-size: 8px; color: #94a3b8; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box;">';
+            html += '  <span>AccessAI Automated WCAG Compliance Engine &bull; WordPress Accessibility Suite (10 Categories)</span>';
+            html += '  <span>Automated Benchmark Assessment Report</span>';
+            html += '</div>';
             html += '</div>';
 
             container.innerHTML = html;
@@ -919,7 +1177,13 @@
             "accessai-alt-table",
             "accessai-heading-table",
             "accessai-form-table",
-            "accessai-contrast-table"
+            "accessai-contrast-table",
+            "accessai-keyboard-table",
+            "accessai-link-table",
+            "accessai-button-table",
+            "accessai-text-spacing-table",
+            "accessai-focus-table",
+            "accessai-table-table"
         ];
         tables.reduce(function (p, tableId) {
             return p.then(function () {

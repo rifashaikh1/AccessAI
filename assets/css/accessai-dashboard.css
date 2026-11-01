@@ -1449,3 +1449,95 @@ code {
         overflow-x: auto;
     }
 }
+
+/* ==========================================================================
+   10 Categories Icons & Badges
+   ========================================================================== */
+.accessai-icon-keyboard { background: #e0e7ff; color: #4338ca; }
+.accessai-icon-links    { background: #e0f2fe; color: #0369a1; }
+.accessai-icon-buttons  { background: #fef3c7; color: #b45309; }
+.accessai-icon-text     { background: #ede9fe; color: #6d28d9; }
+.accessai-icon-focus    { background: #fae8ff; color: #a21caf; }
+.accessai-icon-tables   { background: #ccfbf1; color: #0f766e; }
+
+/* Status Badges */
+.accessai-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--accessai-radius-pill);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+.accessai-status-failure {
+    background: var(--accessai-rose-bg);
+    color: var(--accessai-rose-600);
+    border: 1px solid var(--accessai-rose-border);
+}
+.accessai-status-potential {
+    background: var(--accessai-amber-bg);
+    color: var(--accessai-amber-600);
+    border: 1px solid var(--accessai-amber-border);
+}
+.accessai-status-manual {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+/* Compliance Benchmark Disclaimer Card */
+.accessai-disclaimer-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #64748b;
+    border-radius: var(--accessai-radius-md);
+    padding: 12px 18px;
+    margin-bottom: 24px;
+    box-sizing: border-box;
+}
+.accessai-disclaimer-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: #64748b;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.accessai-disclaimer-card p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #475569;
+    line-height: 1.5;
+}
+.accessai-disclaimer-card strong {
+    color: #1e293b;
+}
+
+/* Word wrapping and column resilience */
+.accessai-wrap-col {
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    max-width: 320px;
+}
+.accessai-url-pill {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--accessai-slate-100);
+    border-radius: 4px;
+    font-size: 0.76rem;
+    font-family: var(--accessai-font-mono);
+    word-break: break-all;
+    color: var(--accessai-slate-700);
+}
+.accessai-subcontext {
+    font-size: 0.78rem;
+    color: var(--accessai-slate-500);
+    margin-top: 4px;
+    font-style: italic;
+}
+
