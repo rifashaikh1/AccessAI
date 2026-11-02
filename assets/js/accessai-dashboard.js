@@ -95,7 +95,8 @@
             }
 
             ajaxPost("accessai_auto_explain_issues", {
-                issues: JSON.stringify([targetIssue])
+                issues: JSON.stringify([targetIssue]),
+                force_refresh: 1
             }).then(function (resp) {
                 if (resp.success && resp.data && resp.data.results && resp.data.results[fp]) {
                     renderExplanation(cell, resp.data.results[fp], tableId, fp);
@@ -379,6 +380,17 @@
             cellMap[row.dataset.fingerprint] = row.querySelector(".accessai-ai-cell");
         });
 
+        // If cells are already pre-rendered with explanations/fallbacks, attach retry listeners and skip AJAX.
+        issues = issues.filter(function (issue) {
+            var cell = cellMap[issue.fingerprint];
+            if (cell && cell.querySelector(".accessai-explain")) {
+                attachRetry(cell, tableId, issue.fingerprint);
+                return false;
+            }
+            return true;
+        });
+        if (!issues.length) return Promise.resolve();
+
         // Process 1 issue at a time with a gentle delay to stay safely under API rate limits.
         var batches = [];
         for (var i = 0; i < issues.length; i += 1) {
@@ -404,58 +416,105 @@
                             }
                         });
                         if (hasTransientError) {
-                            return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () {
+                            return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
                                 return fetchBatch(batch, true);
                             });
                         }
                     }
 
-                    Object.keys(results).forEach(function (fp) {
+                    batch.forEach(function (issue) {
+                        var fp = issue.fingerprint;
+                        var res = (results && results[fp]) || {
+                            fallback: true,
+                            explanation: "Standard WCAG guidance available for this finding.",
+                            impact: "Users relying on assistive technologies or custom spacing may face barriers.",
+                            suggested_fix: "Inspect this element in your page editor and apply standard WCAG 2.1 criteria."
+                        };
                         if (cellMap[fp]) {
-                            renderExplanation(cellMap[fp], results[fp], tableId, fp);
+                            renderExplanation(cellMap[fp], res, tableId, fp);
+                        } else {
+                            syncCardExplanation(fp, res);
                         }
                     });
                 } else {
                     if (!isRetry) {
-                        return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () {
-                            return fetchBatch(batch, true);
+                        return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
+                            return fetchBatch(batch, true).catch(function () {
+                                batch.forEach(function (issue) {
+                                    var fp = issue.fingerprint;
+                                    var res = {
+                                        fallback: true,
+                                        explanation: "Standard WCAG guidance available for this finding.",
+                                        impact: "Users relying on assistive technologies or custom spacing may face barriers.",
+                                        suggested_fix: "Inspect this element in your page editor and apply standard WCAG 2.1 criteria."
+                                    };
+                                    if (cellMap[fp]) {
+                                        renderExplanation(cellMap[fp], res, tableId, fp);
+                                    } else {
+                                        syncCardExplanation(fp, res);
+                                    }
+                                });
+                            });
                         });
                     }
                     batch.forEach(function (issue) {
-                        if (cellMap[issue.fingerprint]) {
-                            renderExplanation(
-                                cellMap[issue.fingerprint],
-                                { error: (resp.data && resp.data.message) || "AI explanation error." },
-                                tableId,
-                                issue.fingerprint
-                            );
+                        var fp = issue.fingerprint;
+                        var res = {
+                            fallback: true,
+                            explanation: "Standard WCAG guidance available for this finding.",
+                            impact: "Users relying on assistive technologies or custom spacing may face barriers.",
+                            suggested_fix: "Inspect this element in your page editor and apply standard WCAG 2.1 criteria."
+                        };
+                        if (cellMap[fp]) {
+                            renderExplanation(cellMap[fp], res, tableId, fp);
+                        } else {
+                            syncCardExplanation(fp, res);
                         }
                     });
                 }
             }).catch(function (err) {
                 if (!isRetry) {
-                    return new Promise(function (resolve) { setTimeout(resolve, 2500); }).then(function () {
-                        return fetchBatch(batch, true);
+                    return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
+                        return fetchBatch(batch, true).catch(function () {
+                            batch.forEach(function (issue) {
+                                var fp = issue.fingerprint;
+                                var res = {
+                                    fallback: true,
+                                    explanation: "Standard WCAG guidance available for this finding.",
+                                    impact: "Users relying on assistive technologies or custom spacing may face barriers.",
+                                    suggested_fix: "Inspect this element in your page editor and apply standard WCAG 2.1 criteria."
+                                };
+                                if (cellMap[fp]) {
+                                    renderExplanation(cellMap[fp], res, tableId, fp);
+                                } else {
+                                    syncCardExplanation(fp, res);
+                                }
+                            });
+                        });
                     });
                 }
                 batch.forEach(function (issue) {
-                    if (cellMap[issue.fingerprint]) {
-                        renderExplanation(
-                            cellMap[issue.fingerprint],
-                            { error: err.message || "Network request failed." },
-                            tableId,
-                            issue.fingerprint
-                        );
+                    var fp = issue.fingerprint;
+                    var res = {
+                        fallback: true,
+                        explanation: "Standard WCAG guidance available for this finding.",
+                        impact: "Users relying on assistive technologies or custom spacing may face barriers.",
+                        suggested_fix: "Inspect this element in your page editor and apply standard WCAG 2.1 criteria."
+                    };
+                    if (cellMap[fp]) {
+                        renderExplanation(cellMap[fp], res, tableId, fp);
+                    } else {
+                        syncCardExplanation(fp, res);
                     }
                 });
             });
         }
 
         return batches.reduce(function (chain, batch) {
-            return chain.then(function () {
-                return new Promise(function (resolve) { setTimeout(resolve, 2500); });
+            return chain.catch(function () {}).then(function () {
+                return new Promise(function (resolve) { setTimeout(resolve, 400); });
             }).then(function () {
-                return fetchBatch(batch, false);
+                return fetchBatch(batch, false).catch(function () {});
             });
         }, Promise.resolve());
     }
@@ -1637,8 +1696,10 @@
             "accessai-table-table"
         ];
         tables.reduce(function (p, tableId) {
-            return p.then(function () {
-                return autoExplainTable(tableId);
+            return p.catch(function () {}).then(function () {
+                return autoExplainTable(tableId).catch(function (e) {
+                    console.warn("Auto-explain notice for " + tableId, e);
+                });
             });
         }, Promise.resolve());
     });

@@ -865,7 +865,7 @@ function accessai_render_dashboard() {
 								<!-- AI Explanation & Actions -->
 								<footer class="accessai-card-footer">
 									<div class="accessai-ai-cell" data-fingerprint="<?php echo esc_attr( $finding['fingerprint'] ); ?>">
-										<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+										<?php echo accessai_render_ai_cell_html( $finding['category_id'], $finding['description'], $finding['fingerprint'], $finding['category_id'] === 'alt_text' ); ?>
 									</div>
 									<div class="accessai-card-actions">
 										<?php if ( $finding['page_id'] ) : ?>
@@ -1489,7 +1489,10 @@ function accessai_render_dashboard() {
 										<td class="accessai-wrap-col"><?php echo wp_kses_post( $b_issue['element'] ?? '' ); ?></td>
 										<td class="accessai-wrap-col"><?php echo esc_html( $b_issue['message'] ?? '' ); ?></td>
 										<td class="accessai-ai-cell">
-											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+											<?php
+											$b_details = 'Button Finding: ' . ( $b_issue['type'] ?? '' ) . '. Button: ' . strip_tags( $b_issue['element'] ?? '' ) . '. Text: ' . ( $b_issue['button_text'] ?? '' ) . '. Message: ' . ( $b_issue['message'] ?? '' );
+											echo accessai_render_ai_cell_html( 'buttons', $b_details, $fp );
+											?>
 										</td>
 									</tr>
 								<?php endforeach; ?>
@@ -1567,7 +1570,10 @@ function accessai_render_dashboard() {
 										<td class="accessai-wrap-col"><em><?php echo esc_html( $ts_issue['sample'] ?? '' ); ?></em></td>
 										<td class="accessai-wrap-col"><small><?php echo esc_html( $ts_issue['metrics'] ?? '' ); ?></small></td>
 										<td class="accessai-ai-cell">
-											<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+											<?php
+											$ts_details = 'Text Spacing Finding: ' . ( $ts_issue['type'] ?? '' ) . '. Element: ' . ( $ts_issue['element'] ?? '' ) . '. Sample: ' . ( $ts_issue['sample'] ?? '' ) . '. Metrics: ' . ( $ts_issue['metrics'] ?? '' );
+											echo accessai_render_ai_cell_html( 'text_spacing', $ts_details, $fp );
+											?>
 										</td>
 									</tr>
 								<?php endforeach; ?>

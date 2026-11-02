@@ -92,6 +92,15 @@ function accessai_gemini_generate( $prompt ) {
 		);
 	}
 
+	if ( ! empty( $_POST['force_refresh'] ) ) {
+		delete_transient( 'accessai_gemini_throttled' );
+	} elseif ( get_transient( 'accessai_gemini_throttled' ) ) {
+		return new WP_Error(
+			'accessai_gemini_throttled',
+			'Gemini API quota reached. Standard WCAG 2.1 guidance provided.'
+		);
+	}
+
 	$prompt = sanitize_textarea_field( $prompt );
 
 	if ( $prompt === '' || strlen( $prompt ) > 6000 ) {
@@ -189,6 +198,13 @@ function accessai_gemini_generate( $prompt ) {
 			$last_error = is_array( $body ) && isset( $body['error']['message'] )
 				? sanitize_text_field( $body['error']['message'] )
 				: 'High demand spike (HTTP ' . $status . ')';
+
+			if ( (int) $status === 429 ) {
+				// Free-tier request quota exhausted for this API key across all models.
+				// Set a 5-minute throttle flag so we do not freeze the dashboard on subsequent issues.
+				set_transient( 'accessai_gemini_throttled', true, 5 * MINUTE_IN_SECONDS );
+				break;
+			}
 
 			if ( $attempt < $max_attempts ) {
 				sleep( 2 );
@@ -318,6 +334,8 @@ function accessai_get_wcag_fallback( $type, $details = '' ) {
 			);
 
 		case 'buttons':
+		case 'button':
+		case 'button_accessibility':
 			return array(
 				'explanation'       => 'Buttons and interactive components must have a programmatically determinable name and role (WCAG 4.1.2). Buttons without text or icon-only buttons without labels cannot be announced by screen readers.',
 				'impact'            => 'Screen reader users focusing on this button hear only "Button" without knowing what action will be performed.',
@@ -328,6 +346,8 @@ function accessai_get_wcag_fallback( $type, $details = '' ) {
 			);
 
 		case 'text_spacing':
+		case 'text-spacing':
+		case 'text_resizing':
 			return array(
 				'explanation'       => 'Content must remain fully legible and functional when users apply custom text spacing (line-height 1.5, paragraph spacing 2em, letter-spacing 0.12em, word-spacing 0.16em) or resize text to 200% (WCAG 1.4.4 & 1.4.12).',
 				'impact'            => 'Users with low vision or cognitive reading conditions who customize text styles experience clipped, overlapping, or cut-off text.',
@@ -420,14 +440,20 @@ function accessai_auto_explain_issues() {
 		}
 
 		$cache_key = 'accessai_explain_' . md5( $fingerprint );
-		$cached    = get_transient( $cache_key );
+
+		if ( ! empty( $_POST['force_refresh'] ) ) {
+			delete_transient( $cache_key );
+			delete_transient( 'accessai_gemini_throttled' );
+		}
+
+		$cached = get_transient( $cache_key );
 
 		// Only return cached result if it has a valid explanation and no error.
 		if ( is_array( $cached ) && ! isset( $cached['error'] ) && ! empty( $cached['explanation'] ) ) {
 			$results[ $fingerprint ] = $cached;
 			continue;
 		} elseif ( is_array( $cached ) ) {
-			// Clear out any old cached errors from before Gemini was working.
+			// Clear out any old cached errors.
 			delete_transient( $cache_key );
 		}
 
@@ -439,7 +465,11 @@ function accessai_auto_explain_issues() {
 			'keyboard',
 			'links',
 			'buttons',
+			'button',
+			'button_accessibility',
 			'text_spacing',
+			'text-spacing',
+			'text_resizing',
 			'focus',
 			'tables',
 			'other'
@@ -466,6 +496,8 @@ function accessai_auto_explain_issues() {
 			$fallback = accessai_get_wcag_fallback( $type, $details );
 			if ( $fallback ) {
 				$results[ $fingerprint ] = $fallback;
+				// Cache fallback for 12 hours so future page loads and tables load instantly!
+				set_transient( $cache_key, $fallback, 12 * HOUR_IN_SECONDS );
 			} else {
 				$results[ $fingerprint ] = array( 'error' => $result->get_error_message() );
 			}
@@ -729,6 +761,67 @@ function accessai_apply_fix() {
 }
 
 /**
+ * Render the HTML content for an AI explanation cell server-side.
+ * If cached or if Gemini is throttled/unconfigured, renders standard WCAG guidance immediately.
+ */
+function accessai_render_ai_cell_html( $type, $details = '', $fingerprint = '', $is_alt = false ) {
+	if ( ! $fingerprint ) {
+		return '<span class="accessai-spinner" aria-label="Loading AI explanation"></span>';
+	}
+
+	$cache_key = 'accessai_explain_' . md5( $fingerprint );
+	$cached    = get_transient( $cache_key );
+
+	if ( ! is_array( $cached ) || empty( $cached['explanation'] ) ) {
+		if ( ! defined( 'ACCESSAI_GEMINI_API_KEY' ) || ! ACCESSAI_GEMINI_API_KEY || get_transient( 'accessai_gemini_throttled' ) ) {
+			$cached = accessai_get_wcag_fallback( $type, $details );
+			if ( $cached ) {
+				set_transient( $cache_key, $cached, 12 * HOUR_IN_SECONDS );
+			}
+		}
+	}
+
+	if ( is_array( $cached ) && ! empty( $cached['explanation'] ) ) {
+		$is_fallback = ! empty( $cached['fallback'] );
+		$title       = $is_fallback ? 'Standard WCAG Guideline &amp; Fix' : 'AI Recommendation &amp; Fix';
+
+		$out  = '<details class="accessai-explain" open>';
+		$out .= '<summary>' . $title . '</summary>';
+		$out .= '<div class="accessai-explain-body">';
+		$out .= '<p><strong>What it means:</strong> ' . esc_html( $cached['explanation'] ) . '</p>';
+		$out .= '<p><strong>Who is affected:</strong> ' . esc_html( $cached['impact'] ) . '</p>';
+		$out .= '<p><strong>Suggested fix:</strong> ' . esc_html( $cached['suggested_fix'] ) . '</p>';
+
+		if ( $is_alt && ! empty( $cached['proposed_alt_text'] ) ) {
+			$out .= '<div class="accessai-eligible-fix-box">';
+			$out .= '<span class="accessai-fix-badge">Eligible Automated Fix</span>';
+			$out .= '<label class="accessai-fix-label">';
+			$out .= '<strong>Reviewed Alt Text:</strong>';
+			$out .= '<input type="text" class="accessai-fix-alt-input" value="' . esc_attr( $cached['proposed_alt_text'] ) . '" maxlength="500" />';
+			$out .= '</label>';
+			$out .= '<div class="accessai-fix-actions">';
+			$out .= '<button type="button" class="button button-primary accessai-apply-row-btn">Apply Fix</button>';
+			$out .= '<span class="accessai-row-status" role="status" aria-live="polite"></span>';
+			$out .= '</div></div>';
+		} else {
+			$out .= '<p class="accessai-fix-note"><em>Manual review required: Review the suggested fix above and update the page in the editor.</em></p>';
+		}
+
+		if ( $is_fallback ) {
+			$out .= '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #c3c4c7;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+			$out .= '<button type="button" class="button button-secondary accessai-retry-btn" style="font-size:0.8rem;height:26px;line-height:24px;">↻ Refresh with Gemini AI</button>';
+			$out .= '<span style="font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Gemini was busy</span>';
+			$out .= '</div>';
+		}
+
+		$out .= '</div></details>';
+		return $out;
+	}
+
+	return '<span class="accessai-spinner" aria-label="Loading AI explanation"></span>';
+}
+
+/**
  * Enqueue admin dashboard assets for the AccessAI page.
  */
 add_action( 'admin_enqueue_scripts', 'accessai_ai_admin_assets' );
@@ -744,7 +837,7 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-css',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/css/accessai-dashboard.css',
 		array( 'dashicons' ),
-		'1.2.6'
+		'1.3.1'
 	);
 
 	wp_enqueue_script(
@@ -759,7 +852,7 @@ function accessai_ai_admin_assets( $hook ) {
 		'accessai-dashboard-js',
 		plugin_dir_url( dirname( dirname( __FILE__ ) ) . '/accessai.php' ) . 'assets/js/accessai-dashboard.js',
 		array( 'jquery', 'html2pdf-js' ),
-		'1.2.9',
+		'1.3.1',
 		true
 	);
 
