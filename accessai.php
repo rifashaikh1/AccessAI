@@ -279,7 +279,7 @@ function accessai_render_dashboard() {
 		}
 	}
 
-	$has_api_key = defined( 'ACCESSAI_GEMINI_API_KEY' ) && ACCESSAI_GEMINI_API_KEY;
+	$has_api_key = defined( 'ACCESSAI_GROQ_API_KEY' ) && ACCESSAI_GROQ_API_KEY;
 
 	// Build fingerprinted issue lists for auto-explain across all 10 categories.
 	$alt_issues_json          = accessai_build_issue_data( $alt_issues, 'alt_text' );
@@ -375,7 +375,7 @@ function accessai_render_dashboard() {
 				<div class="accessai-brand-text">
 					<div class="accessai-brand-title-wrap">
 						<h1>AccessAI</h1>
-						<span class="accessai-version-pill">v1.3 &bull; 10 Checkpoints</span>
+						<span class="accessai-version-pill">v1.4 &bull; 10 Checkpoints</span>
 					</div>
 					<p class="accessai-subtitle">Comprehensive WCAG 2.1 accessibility auditing and AI-assisted remediation across 10 core categories</p>
 				</div>
@@ -384,12 +384,12 @@ function accessai_render_dashboard() {
 				<?php if ( ! $has_api_key ) : ?>
 					<div class="accessai-api-pill accessai-api-missing">
 						<span class="accessai-status-dot"></span>
-						<span>Gemini API Key Needed</span>
+						<span>Groq API Key Needed</span>
 					</div>
 				<?php else : ?>
 					<div class="accessai-api-pill accessai-api-connected">
 						<span class="accessai-status-dot"></span>
-						<span>Gemini 3.8 Flash Active</span>
+						<span>Groq AI Connected</span>
 						<button id="accessai-test-btn" type="button" class="accessai-pill-btn">Test</button>
 					</div>
 					<span id="accessai-test-result" class="accessai-test-result"></span>
@@ -400,9 +400,9 @@ function accessai_render_dashboard() {
 		<?php if ( ! $has_api_key ) : ?>
 			<div class="notice notice-warning accessai-notice">
 				<p>
-					<strong>Gemini API key not configured.</strong>
+					<strong>Groq API key not configured.</strong>
 					Standard WCAG 2.1 authoritative guidance fallbacks will be used.
-					Add <code>define( 'ACCESSAI_GEMINI_API_KEY', 'your-key' );</code> to <code>wp-config.php</code> to activate real-time Gemini recommendations.
+					Add <code>define( 'ACCESSAI_GROQ_API_KEY', 'your-key' );</code> to <code>wp-config.php</code> to activate real-time Groq recommendations.
 				</p>
 			</div>
 		<?php endif; ?>

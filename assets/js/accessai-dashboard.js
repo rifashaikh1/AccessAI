@@ -171,7 +171,7 @@
 
             if (isFallback) {
                 html +=
-                    '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #c3c4c7;font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Gemini was busy</div>';
+                    '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #c3c4c7;font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Groq was busy</div>';
             }
 
             html += '</div></details>';
@@ -287,8 +287,8 @@
         if (isFallback) {
             html +=
                 '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #c3c4c7;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-                '<button type="button" class="button button-secondary accessai-retry-btn" style="font-size:0.8rem;height:26px;line-height:24px;">↻ Refresh with Gemini AI</button>' +
-                '<span style="font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Gemini was busy</span>' +
+                '<button type="button" class="button button-secondary accessai-retry-btn" style="font-size:0.8rem;height:26px;line-height:24px;">↻ Refresh with Groq AI</button>' +
+                '<span style="font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Groq was busy</span>' +
                 '</div>';
         }
 
@@ -511,10 +511,10 @@
         }
 
         return batches.reduce(function (chain, batch) {
-            return chain.catch(function () {}).then(function () {
+            return chain.catch(function () { }).then(function () {
                 return new Promise(function (resolve) { setTimeout(resolve, 400); });
             }).then(function () {
-                return fetchBatch(batch, false).catch(function () {});
+                return fetchBatch(batch, false).catch(function () { });
             });
         }, Promise.resolve());
     }
@@ -620,7 +620,7 @@
     function escAttr(str) { return esc(str); }
 
     /* ------------------------------------------------------------------ */
-    /* Test Gemini connection button                                         */
+    /* Test Groq connection button                                           */
     /* ------------------------------------------------------------------ */
     function initTestButton() {
         var btn = document.getElementById("accessai-test-btn");
@@ -1418,8 +1418,8 @@
             allFindingCards.forEach(function (card) {
                 var matchPriority = (priorityVal === "all" || card.dataset.priority === priorityVal);
                 var matchCategory = (categoryVal === "all" || card.dataset.category === categoryVal);
-                var matchStatus   = (statusVal === "all" || card.dataset.status === statusVal);
-                var matchSearch   = true;
+                var matchStatus = (statusVal === "all" || card.dataset.status === statusVal);
+                var matchSearch = true;
 
                 if (searchVal !== "") {
                     var cardSearchText = (card.dataset.searchText || "").toLowerCase();
@@ -1437,8 +1437,8 @@
             allTableRows.forEach(function (row) {
                 var matchPriority = (priorityVal === "all" || row.dataset.priority === priorityVal);
                 var matchCategory = (categoryVal === "all" || row.dataset.category === categoryVal);
-                var matchStatus   = (statusVal === "all" || row.dataset.status === statusVal);
-                var matchSearch   = true;
+                var matchStatus = (statusVal === "all" || row.dataset.status === statusVal);
+                var matchSearch = true;
 
                 if (searchVal !== "") {
                     var rowSearchText = (row.dataset.searchText || "").toLowerCase();
@@ -1696,7 +1696,7 @@
             "accessai-table-table"
         ];
         tables.reduce(function (p, tableId) {
-            return p.catch(function () {}).then(function () {
+            return p.catch(function () { }).then(function () {
                 return autoExplainTable(tableId).catch(function (e) {
                     console.warn("Auto-explain notice for " + tableId, e);
                 });

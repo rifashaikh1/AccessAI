@@ -9,7 +9,7 @@
  * 4. Repeated components and scope.
  * 5. Detection confidence (uncertain/potential issues are never Critical).
  *
- * Deterministic and consistent — does NOT rely on Gemini for priority.
+ * Deterministic and consistent — does NOT rely on external AI for priority.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
