@@ -13,8 +13,25 @@
     var hasApiKey = !!cfg.hasApiKey;
 
     /* ------------------------------------------------------------------ */
-    /* Utility: AJAX POST via fetch                                         */
+    /* Utility: Escaping & AJAX POST via fetch                             */
     /* ------------------------------------------------------------------ */
+    function esc(str) {
+        if (!str) return "";
+        var div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function escAttr(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
     function parseJsonResponse(r) {
         return r.text().then(function (text) {
             try {
@@ -96,6 +113,123 @@
         });
     }
 
+    function syncCardExplanation(fp, result) {
+        if (!fp) return;
+        var cards = document.querySelectorAll('.accessai-finding-card[data-fingerprint="' + fp + '"]');
+        if (!cards || !cards.length) return;
+
+        cards.forEach(function (card) {
+            var cardCell = card.querySelector(".accessai-ai-cell");
+            if (!cardCell) return;
+
+            if (result.error) {
+                cardCell.innerHTML =
+                    '<details class="accessai-explain">' +
+                    '<summary style="color:#b91c1c;">⚠ AI notice — click for details</summary>' +
+                    '<div class="accessai-explain-body" style="border-left-color:#b91c1c;">' +
+                    '<p style="color:#b91c1c;font-size:0.82rem;margin-bottom:8px;">' + esc(result.error) + '</p>' +
+                    '</div></details>';
+                return;
+            }
+
+            var isAlt = (card.dataset.category === "alt_text");
+            var hasProposedAlt = isAlt && result.proposed_alt_text && result.proposed_alt_text.trim() !== "";
+            var isFallback = !!result.fallback;
+            var summaryTitle = isFallback
+                ? "Standard WCAG Guideline &amp; Fix"
+                : "AI Recommendation &amp; Fix";
+
+            var html =
+                '<details class="accessai-explain" open>' +
+                '<summary>' + summaryTitle + '</summary>' +
+                '<div class="accessai-explain-body">' +
+                '<p><strong>What it means:</strong> ' + esc(result.explanation) + '</p>' +
+                '<p><strong>Who is affected:</strong> ' + esc(result.impact) + '</p>' +
+                '<p><strong>Suggested fix:</strong> ' + esc(result.suggested_fix) + '</p>';
+
+            if (hasProposedAlt) {
+                html +=
+                    '<div class="accessai-eligible-fix-box">' +
+                    '<span class="accessai-fix-badge">Eligible Automated Fix</span>' +
+                    '<label class="accessai-fix-label">' +
+                    '<strong>Reviewed Alt Text:</strong>' +
+                    '<input type="text" class="accessai-fix-alt-input" value="' + escAttr(result.proposed_alt_text) + '" maxlength="500" />' +
+                    '</label>' +
+                    '<div class="accessai-fix-actions">' +
+                    '<button type="button" class="button button-primary accessai-apply-card-btn">Apply Fix</button>' +
+                    '<span class="accessai-card-status" role="status" aria-live="polite"></span>' +
+                    '</div>' +
+                    '</div>';
+            } else if (isAlt) {
+                html +=
+                    '<p class="accessai-fix-note"><em>Manual review required: Review the image context and update alt text manually in the page editor.</em></p>';
+            } else {
+                html +=
+                    '<p class="accessai-fix-note"><em>Manual review required: Review the suggested fix above and update the page in the editor.</em></p>';
+            }
+
+            if (isFallback) {
+                html +=
+                    '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #c3c4c7;font-size:0.78rem;color:#646970;">Standard WCAG guideline loaded while Gemini was busy</div>';
+            }
+
+            html += '</div></details>';
+            cardCell.innerHTML = html;
+
+            if (hasProposedAlt) {
+                var applyBtn = cardCell.querySelector(".accessai-apply-card-btn");
+                var altInput = cardCell.querySelector(".accessai-fix-alt-input");
+                var statusEl = cardCell.querySelector(".accessai-card-status");
+
+                if (applyBtn && altInput && statusEl) {
+                    applyBtn.addEventListener("click", function () {
+                        var approvedAlt = altInput.value.trim();
+                        if (!approvedAlt) {
+                            statusEl.style.color = "#b91c1c";
+                            statusEl.textContent = "Please enter alt text.";
+                            return;
+                        }
+
+                        if (!window.confirm("Apply this reviewed alt text to the page image?")) {
+                            return;
+                        }
+
+                        applyBtn.disabled = true;
+                        altInput.disabled = true;
+                        statusEl.style.color = "#2271b1";
+                        statusEl.textContent = "Applying fix…";
+
+                        ajaxPost("accessai_apply_fix", {
+                            page_id: card.dataset.pageId || "",
+                            image_src: card.dataset.imageSrc || "",
+                            approved_alt: approvedAlt,
+                            fingerprint: fp
+                        }).then(function (resp) {
+                            if (resp.success) {
+                                statusEl.style.color = "#186a3b";
+                                statusEl.textContent = "✓ Fixed! Refreshing dashboard…";
+                                card.classList.add("accessai-row-fixed");
+                                setTimeout(function () {
+                                    window.location.reload();
+                                }, 1200);
+                            } else {
+                                applyBtn.disabled = false;
+                                altInput.disabled = false;
+                                statusEl.style.color = "#b91c1c";
+                                statusEl.textContent = "Fix error: " + (resp.data && resp.data.message ? resp.data.message : "Unknown error.");
+                            }
+                        }).catch(function (err) {
+                            applyBtn.disabled = false;
+                            altInput.disabled = false;
+                            statusEl.style.color = "#b91c1c";
+                            statusEl.textContent = "Request error: " + err.message;
+                        });
+                    });
+                }
+            }
+        });
+    }
+
     function renderExplanation(cell, result, tableId, fp) {
         if (result.error) {
             cell.innerHTML =
@@ -107,6 +241,7 @@
                 '</div></details>';
 
             attachRetry(cell, tableId, fp);
+            syncCardExplanation(fp, result);
             return;
         }
 
@@ -214,14 +349,21 @@
                 });
             }
         }
+
+        // Mirror result into any matching card in the prioritized stream
+        syncCardExplanation(fp, result);
     }
 
     function autoExplainTable(tableId) {
         if (!hasApiKey) {
             // Remove spinners gracefully when no API key configured.
             var table = document.getElementById(tableId);
-            if (!table) return;
-            table.querySelectorAll(".accessai-ai-cell").forEach(function (cell) {
+            if (table) {
+                table.querySelectorAll(".accessai-ai-cell").forEach(function (cell) {
+                    cell.innerHTML = '<span class="accessai-ai-na">No API key</span>';
+                });
+            }
+            document.querySelectorAll("#accessai-findings-stream .accessai-ai-cell").forEach(function (cell) {
                 cell.innerHTML = '<span class="accessai-ai-na">No API key</span>';
             });
             return;
@@ -1165,12 +1307,321 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* Issue Filtering & Smart Prioritization Engine                      */
+    /* ------------------------------------------------------------------ */
+    function initIssueFiltersAndPrioritization() {
+        var filterPanel = document.getElementById("accessai-filter-panel");
+        if (!filterPanel) return;
+
+        var searchInput = document.getElementById("accessai-filter-search");
+        var searchClearBtn = document.getElementById("accessai-search-clear-btn");
+        var prioritySelect = document.getElementById("accessai-filter-priority");
+        var categorySelect = document.getElementById("accessai-filter-category");
+        var statusSelect = document.getElementById("accessai-filter-status");
+        var sortSelect = document.getElementById("accessai-sort-select");
+        var clearFiltersBtn = document.getElementById("accessai-clear-filters-btn");
+        var emptyResetBtn = document.getElementById("accessai-empty-reset-btn");
+        var counterText = document.getElementById("accessai-filter-counter-text");
+        var emptyState = document.getElementById("accessai-no-filter-results");
+
+        var tabPrioritized = document.getElementById("accessai-tab-prioritized");
+        var tabCategory = document.getElementById("accessai-tab-category");
+        var panelPrioritized = document.getElementById("accessai-prioritized-view");
+        var panelCategory = document.getElementById("accessai-category-view");
+
+        var priorityCards = document.querySelectorAll(".accessai-priority-card");
+        var streamContainer = document.getElementById("accessai-findings-stream");
+        var allFindingCards = streamContainer ? Array.from(streamContainer.querySelectorAll(".accessai-finding-card")) : [];
+        var allTableRows = document.querySelectorAll("#accessai-category-view tbody tr[data-priority]");
+        var allSections = document.querySelectorAll("#accessai-category-view .accessai-section");
+
+        var totalCount = allFindingCards.length;
+
+        // Filter state
+        var filterState = {
+            search: "",
+            priority: "all",
+            category: "all",
+            status: "all",
+            sort: "highest"
+        };
+
+        function applyFilterAndSort() {
+            var searchVal = filterState.search.trim().toLowerCase();
+            var priorityVal = filterState.priority;
+            var categoryVal = filterState.category;
+            var statusVal = filterState.status;
+            var sortVal = filterState.sort;
+
+            var visibleCardsCount = 0;
+
+            // 1. Filter finding cards in stream view
+            allFindingCards.forEach(function (card) {
+                var matchPriority = (priorityVal === "all" || card.dataset.priority === priorityVal);
+                var matchCategory = (categoryVal === "all" || card.dataset.category === categoryVal);
+                var matchStatus   = (statusVal === "all" || card.dataset.status === statusVal);
+                var matchSearch   = true;
+
+                if (searchVal !== "") {
+                    var cardSearchText = (card.dataset.searchText || "").toLowerCase();
+                    matchSearch = cardSearchText.indexOf(searchVal) !== -1;
+                }
+
+                var isVisible = matchPriority && matchCategory && matchStatus && matchSearch;
+                card.style.display = isVisible ? "" : "none";
+                if (isVisible) {
+                    visibleCardsCount++;
+                }
+            });
+
+            // 2. Filter category table rows in category view
+            allTableRows.forEach(function (row) {
+                var matchPriority = (priorityVal === "all" || row.dataset.priority === priorityVal);
+                var matchCategory = (categoryVal === "all" || row.dataset.category === categoryVal);
+                var matchStatus   = (statusVal === "all" || row.dataset.status === statusVal);
+                var matchSearch   = true;
+
+                if (searchVal !== "") {
+                    var rowSearchText = (row.dataset.searchText || "").toLowerCase();
+                    matchSearch = rowSearchText.indexOf(searchVal) !== -1;
+                }
+
+                var isVisible = matchPriority && matchCategory && matchStatus && matchSearch;
+                row.style.display = isVisible ? "" : "none";
+            });
+
+            // 3. Update visibility of category sections
+            allSections.forEach(function (sec) {
+                var secCat = sec.dataset.category;
+                if (categoryVal !== "all" && secCat !== categoryVal) {
+                    sec.style.display = "none";
+                } else {
+                    var table = sec.querySelector("table.accessai-table");
+                    if (table) {
+                        var visibleRows = table.querySelectorAll("tbody tr[data-priority]:not([style*='display: none'])");
+                        sec.style.display = (visibleRows.length > 0) ? "" : "none";
+                    } else {
+                        // Section without table (passed checkpoint)
+                        sec.style.display = (searchVal === "" && priorityVal === "all" && statusVal === "all") ? "" : "none";
+                    }
+                }
+            });
+
+            // 4. Stable sort on streamContainer
+            if (streamContainer && allFindingCards.length > 0) {
+                var sortedCards = allFindingCards.slice().sort(function (a, b) {
+                    var orderA = parseInt(a.dataset.originalOrder || "0", 10);
+                    var orderB = parseInt(b.dataset.originalOrder || "0", 10);
+                    var weightA = parseInt(a.dataset.priorityWeight || "0", 10);
+                    var weightB = parseInt(b.dataset.priorityWeight || "0", 10);
+
+                    if (sortVal === "highest") {
+                        if (weightA !== weightB) return weightB - weightA;
+                        return orderA - orderB;
+                    } else if (sortVal === "lowest") {
+                        if (weightA !== weightB) return weightA - weightB;
+                        return orderA - orderB;
+                    } else if (sortVal === "category") {
+                        var catA = (a.dataset.categoryLabel || "").toLowerCase();
+                        var catB = (b.dataset.categoryLabel || "").toLowerCase();
+                        var cmp = catA.localeCompare(catB);
+                        if (cmp !== 0) return cmp;
+                        if (weightA !== weightB) return weightB - weightA;
+                        return orderA - orderB;
+                    } else if (sortVal === "wcag") {
+                        var wcagA = (a.dataset.wcag || "").toLowerCase();
+                        var wcagB = (b.dataset.wcag || "").toLowerCase();
+                        var cmpWcag = wcagA.localeCompare(wcagB);
+                        if (cmpWcag !== 0) return cmpWcag;
+                        if (weightA !== weightB) return weightB - weightA;
+                        return orderA - orderB;
+                    } else if (sortVal === "url") {
+                        var urlA = (a.dataset.url || "").toLowerCase();
+                        var urlB = (b.dataset.url || "").toLowerCase();
+                        var cmpUrl = urlA.localeCompare(urlB);
+                        if (cmpUrl !== 0) return cmpUrl;
+                        if (weightA !== weightB) return weightB - weightA;
+                        return orderA - orderB;
+                    }
+                    return orderA - orderB;
+                });
+
+                // Re-append sorted cards in order
+                sortedCards.forEach(function (card) {
+                    streamContainer.appendChild(card);
+                });
+            }
+
+            // 5. Update counter display
+            if (counterText) {
+                counterText.innerHTML = 'Showing <strong id="accessai-visible-count">' + visibleCardsCount + '</strong> of <strong>' + totalCount + '</strong> findings';
+            }
+
+            // 6. Handle empty state
+            if (emptyState) {
+                if (visibleCardsCount === 0 && totalCount > 0) {
+                    emptyState.style.display = "flex";
+                    if (streamContainer) streamContainer.style.display = "none";
+                } else {
+                    emptyState.style.display = "none";
+                    if (streamContainer) streamContainer.style.display = "";
+                }
+            }
+
+            // 7. Update active card in priority summary
+            priorityCards.forEach(function (pCard) {
+                var pType = pCard.dataset.priority;
+                if (priorityVal !== "all" && pType === priorityVal) {
+                    pCard.classList.add("is-active");
+                    pCard.setAttribute("aria-pressed", "true");
+                } else {
+                    pCard.classList.remove("is-active");
+                    pCard.setAttribute("aria-pressed", "false");
+                }
+            });
+        }
+
+        // Event listeners for filters
+        if (searchInput) {
+            searchInput.addEventListener("input", function () {
+                filterState.search = searchInput.value;
+                if (searchClearBtn) {
+                    searchClearBtn.style.display = searchInput.value ? "block" : "none";
+                }
+                applyFilterAndSort();
+            });
+        }
+
+        if (searchClearBtn) {
+            searchClearBtn.addEventListener("click", function () {
+                searchInput.value = "";
+                filterState.search = "";
+                searchClearBtn.style.display = "none";
+                searchInput.focus();
+                applyFilterAndSort();
+            });
+        }
+
+        if (prioritySelect) {
+            prioritySelect.addEventListener("change", function () {
+                filterState.priority = prioritySelect.value;
+                applyFilterAndSort();
+            });
+        }
+
+        if (categorySelect) {
+            categorySelect.addEventListener("change", function () {
+                filterState.category = categorySelect.value;
+                applyFilterAndSort();
+            });
+        }
+
+        if (statusSelect) {
+            statusSelect.addEventListener("change", function () {
+                filterState.status = statusSelect.value;
+                applyFilterAndSort();
+            });
+        }
+
+        if (sortSelect) {
+            sortSelect.addEventListener("change", function () {
+                filterState.sort = sortSelect.value;
+                applyFilterAndSort();
+            });
+        }
+
+        // Interactive Priority Summary Cards
+        priorityCards.forEach(function (card) {
+            card.addEventListener("click", function () {
+                var clickedPriority = card.dataset.priority;
+                if (filterState.priority === clickedPriority) {
+                    filterState.priority = "all";
+                } else {
+                    filterState.priority = clickedPriority;
+                }
+                if (prioritySelect) {
+                    prioritySelect.value = filterState.priority;
+                }
+                applyFilterAndSort();
+            });
+        });
+
+        function resetAllFilters() {
+            filterState.search = "";
+            filterState.priority = "all";
+            filterState.category = "all";
+            filterState.status = "all";
+            filterState.sort = "highest";
+
+            if (searchInput) searchInput.value = "";
+            if (searchClearBtn) searchClearBtn.style.display = "none";
+            if (prioritySelect) prioritySelect.value = "all";
+            if (categorySelect) categorySelect.value = "all";
+            if (statusSelect) statusSelect.value = "all";
+            if (sortSelect) sortSelect.value = "highest";
+
+            applyFilterAndSort();
+        }
+
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener("click", resetAllFilters);
+        }
+
+        if (emptyResetBtn) {
+            emptyResetBtn.addEventListener("click", resetAllFilters);
+        }
+
+        // View Mode Switcher
+        function switchView(target) {
+            if (target === "category") {
+                if (tabCategory) {
+                    tabCategory.classList.add("is-active");
+                    tabCategory.setAttribute("aria-selected", "true");
+                }
+                if (tabPrioritized) {
+                    tabPrioritized.classList.remove("is-active");
+                    tabPrioritized.setAttribute("aria-selected", "false");
+                }
+                if (panelCategory) panelCategory.classList.add("is-active");
+                if (panelPrioritized) panelPrioritized.classList.remove("is-active");
+            } else {
+                if (tabPrioritized) {
+                    tabPrioritized.classList.add("is-active");
+                    tabPrioritized.setAttribute("aria-selected", "true");
+                }
+                if (tabCategory) {
+                    tabCategory.classList.remove("is-active");
+                    tabCategory.setAttribute("aria-selected", "false");
+                }
+                if (panelPrioritized) panelPrioritized.classList.add("is-active");
+                if (panelCategory) panelCategory.classList.remove("is-active");
+            }
+        }
+
+        if (tabPrioritized) {
+            tabPrioritized.addEventListener("click", function () {
+                switchView("prioritized");
+            });
+        }
+
+        if (tabCategory) {
+            tabCategory.addEventListener("click", function () {
+                switchView("category");
+            });
+        }
+
+        // Initial run
+        applyFilterAndSort();
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Bootstrap                                                             */
     /* ------------------------------------------------------------------ */
     document.addEventListener("DOMContentLoaded", function () {
         initTestButton();
         initPageScan();
         initPdfReportExport();
+        initIssueFiltersAndPrioritization();
 
         // Auto-explain all active issue tables sequentially to avoid connection congestion.
         var tables = [

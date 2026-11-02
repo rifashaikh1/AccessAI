@@ -22,6 +22,7 @@ require_once plugin_dir_path( __FILE__ ) . 'scanner/table-accessibility.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/keyboard-accessibility.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/text-spacing-adaptation.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/focus-visibility.php';
+require_once plugin_dir_path( __FILE__ ) . 'scanner/prioritization.php';
 require_once plugin_dir_path( __FILE__ ) . 'scanner/ai-assistant.php';
 
 // Register admin menu.
@@ -292,6 +293,74 @@ function accessai_render_dashboard() {
 	$focus_issues_json        = accessai_build_issue_data( $focus_results, 'focus' );
 	$table_issues_json        = accessai_build_issue_data( $table_issues, 'tables' );
 
+	// Build unified normalized findings list across all 10 categories.
+	$normalized_findings = array();
+	$raw_category_map    = array(
+		'alt_text'          => $alt_issues,
+		'heading_structure' => $heading_issues,
+		'form_label'        => $form_issues,
+		'color_contrast'    => $contrast_results,
+		'keyboard'          => $keyboard_issues,
+		'links'             => $link_issues,
+		'buttons'           => $button_issues,
+		'text_spacing'      => $text_spacing_results,
+		'focus'             => $focus_results,
+		'tables'            => $table_issues,
+	);
+
+	foreach ( $raw_category_map as $cat_id => $raw_list ) {
+		if ( ! empty( $raw_list ) && is_array( $raw_list ) ) {
+			foreach ( $raw_list as $idx => $raw_item ) {
+				$normalized_findings[] = accessai_normalize_finding( $raw_item, $cat_id, $scanned_post, $idx );
+			}
+		}
+	}
+
+	// Calculate counts for priorities and detection statuses.
+	$priority_counts = array(
+		'critical' => 0,
+		'high'     => 0,
+		'medium'   => 0,
+		'low'      => 0,
+	);
+	$status_counts = array(
+		'total'     => count( $normalized_findings ),
+		'failure'   => 0,
+		'potential' => 0,
+		'manual'    => 0,
+	);
+	$active_statuses = array();
+
+	foreach ( $normalized_findings as $finding ) {
+		$p = $finding['priority'];
+		if ( isset( $priority_counts[ $p ] ) ) {
+			$priority_counts[ $p ]++;
+		}
+		$st = $finding['status'];
+		if ( ! in_array( $st, $active_statuses, true ) ) {
+			$active_statuses[] = $st;
+		}
+		if ( $st === 'Verified Failure' ) {
+			$status_counts['failure']++;
+		} elseif ( $st === 'Potential Issue' ) {
+			$status_counts['potential']++;
+		} elseif ( $st === 'Manual Review Required' ) {
+			$status_counts['manual']++;
+		}
+	}
+
+	// Sort findings by default: Highest Priority First.
+	usort( $normalized_findings, function( $a, $b ) {
+		if ( $a['priority_weight'] !== $b['priority_weight'] ) {
+			return $b['priority_weight'] <=> $a['priority_weight'];
+		}
+		$cat_cmp = strcmp( $a['category_label'], $b['category_label'] );
+		if ( $cat_cmp !== 0 ) {
+			return $cat_cmp;
+		}
+		return strcmp( $a['title'], $b['title'] );
+	} );
+
 	?>
 	<div class="wrap accessai-wrap">
 
@@ -487,9 +556,343 @@ function accessai_render_dashboard() {
 		<?php else : ?>
 
 			<!-- ============================================================
+			     SMART ISSUE PRIORITIZATION & SUMMARY DASHBOARD
+			     ============================================================ -->
+			<div class="accessai-priority-summary-section" id="accessai-priority-summary">
+				<div class="accessai-summary-header">
+					<div class="accessai-summary-title">
+						<span class="dashicons dashicons-shield-alt accessai-summary-icon"></span>
+						<div>
+							<h3>Issue Prioritization &amp; Severity Breakdown</h3>
+							<p class="accessai-summary-subtitle">Deterministic ranking based on barrier severity, disabled user impact, and detection confidence</p>
+						</div>
+					</div>
+					<div class="accessai-summary-meta">
+						<span class="accessai-summary-hint"><span class="dashicons dashicons-filter"></span> Click any priority card to filter findings</span>
+					</div>
+				</div>
+
+				<div class="accessai-priority-cards-grid">
+					<!-- Critical Priority Card -->
+					<button type="button" class="accessai-priority-card is-critical" data-priority="critical" aria-pressed="false" title="Filter by Critical Priority">
+						<div class="accessai-pcard-top">
+							<span class="accessai-priority-badge is-critical">
+								<span class="dashicons dashicons-dismiss"></span> Critical
+							</span>
+							<span class="accessai-pcard-count" id="accessai-count-critical"><?php echo esc_html( $priority_counts['critical'] ); ?></span>
+						</div>
+						<div class="accessai-pcard-label">Critical Priority</div>
+						<p class="accessai-pcard-desc">Severe barrier blocking essential content or functionality</p>
+					</button>
+
+					<!-- High Priority Card -->
+					<button type="button" class="accessai-priority-card is-high" data-priority="high" aria-pressed="false" title="Filter by High Priority">
+						<div class="accessai-pcard-top">
+							<span class="accessai-priority-badge is-high">
+								<span class="dashicons dashicons-warning"></span> High
+							</span>
+							<span class="accessai-pcard-count" id="accessai-count-high"><?php echo esc_html( $priority_counts['high'] ); ?></span>
+						</div>
+						<div class="accessai-pcard-label">High Priority</div>
+						<p class="accessai-pcard-desc">Significant accessibility barrier that should be addressed soon</p>
+					</button>
+
+					<!-- Medium Priority Card -->
+					<button type="button" class="accessai-priority-card is-medium" data-priority="medium" aria-pressed="false" title="Filter by Medium Priority">
+						<div class="accessai-pcard-top">
+							<span class="accessai-priority-badge is-medium">
+								<span class="dashicons dashicons-info"></span> Medium
+							</span>
+							<span class="accessai-pcard-count" id="accessai-count-medium"><?php echo esc_html( $priority_counts['medium'] ); ?></span>
+						</div>
+						<div class="accessai-pcard-label">Medium Priority</div>
+						<p class="accessai-pcard-desc">Accessibility problem with more limited impact or provisional</p>
+					</button>
+
+					<!-- Low Priority Card -->
+					<button type="button" class="accessai-priority-card is-low" data-priority="low" aria-pressed="false" title="Filter by Low Priority">
+						<div class="accessai-pcard-top">
+							<span class="accessai-priority-badge is-low">
+								<span class="dashicons dashicons-lightbulb"></span> Low
+							</span>
+							<span class="accessai-pcard-count" id="accessai-count-low"><?php echo esc_html( $priority_counts['low'] ); ?></span>
+						</div>
+						<div class="accessai-pcard-label">Low Priority</div>
+						<p class="accessai-pcard-desc">Lower-impact issue or improvement recommendation</p>
+					</button>
+				</div>
+
+				<!-- Status Breakdown Summary Strip -->
+				<div class="accessai-status-summary-bar">
+					<div class="accessai-status-metric">
+						<span class="accessai-sm-label">Total Findings:</span>
+						<strong class="accessai-sm-value" id="accessai-summary-total"><?php echo esc_html( $status_counts['total'] ); ?></strong>
+					</div>
+					<div class="accessai-status-divider" aria-hidden="true">•</div>
+					<div class="accessai-status-metric">
+						<span class="accessai-status-dot is-failure"></span>
+						<span class="accessai-sm-label">Verified Failures:</span>
+						<strong class="accessai-sm-value" id="accessai-summary-failure"><?php echo esc_html( $status_counts['failure'] ); ?></strong>
+					</div>
+					<div class="accessai-status-divider" aria-hidden="true">•</div>
+					<div class="accessai-status-metric">
+						<span class="accessai-status-dot is-potential"></span>
+						<span class="accessai-sm-label">Potential Issues:</span>
+						<strong class="accessai-sm-value" id="accessai-summary-potential"><?php echo esc_html( $status_counts['potential'] ); ?></strong>
+					</div>
+					<div class="accessai-status-divider" aria-hidden="true">•</div>
+					<div class="accessai-status-metric">
+						<span class="accessai-status-dot is-manual"></span>
+						<span class="accessai-sm-label">Manual Review Required:</span>
+						<strong class="accessai-sm-value" id="accessai-summary-manual"><?php echo esc_html( $status_counts['manual'] ); ?></strong>
+					</div>
+				</div>
+			</div>
+
+			<!-- ============================================================
+			     FILTER & SORT TOOLBAR
+			     ============================================================ -->
+			<div class="accessai-section accessai-filter-section" id="accessai-filter-panel">
+				<div class="accessai-filter-toolbar">
+					<div class="accessai-filter-grid">
+						<!-- Search Field -->
+						<div class="accessai-filter-col accessai-search-col">
+							<label for="accessai-filter-search" class="accessai-filter-field-label">Search Findings</label>
+							<div class="accessai-search-input-wrap">
+								<span class="dashicons dashicons-search accessai-search-ico"></span>
+								<input type="search"
+									   id="accessai-filter-search"
+									   class="accessai-filter-input"
+									   placeholder="Search title, description, selector, URL, or WCAG (e.g. 1.4.3)..."
+									   aria-label="Search accessibility issues"
+									   autocomplete="off" />
+								<button type="button" id="accessai-search-clear-btn" class="accessai-search-clear-btn" title="Clear search" style="display:none;">
+									<span class="dashicons dashicons-no-alt"></span>
+								</button>
+							</div>
+						</div>
+
+						<!-- Priority Filter -->
+						<div class="accessai-filter-col">
+							<label for="accessai-filter-priority" class="accessai-filter-field-label">Priority</label>
+							<select id="accessai-filter-priority" class="accessai-filter-select">
+								<option value="all">All Priorities (<?php echo esc_html( $status_counts['total'] ); ?>)</option>
+								<option value="critical">Critical (<?php echo esc_html( $priority_counts['critical'] ); ?>)</option>
+								<option value="high">High (<?php echo esc_html( $priority_counts['high'] ); ?>)</option>
+								<option value="medium">Medium (<?php echo esc_html( $priority_counts['medium'] ); ?>)</option>
+								<option value="low">Low (<?php echo esc_html( $priority_counts['low'] ); ?>)</option>
+							</select>
+						</div>
+
+						<!-- Issue Category Filter -->
+						<div class="accessai-filter-col">
+							<label for="accessai-filter-category" class="accessai-filter-field-label">Issue Category</label>
+							<select id="accessai-filter-category" class="accessai-filter-select">
+								<option value="all">All Categories</option>
+								<?php
+								$registered_scanners = accessai_get_registered_scanners();
+								foreach ( $registered_scanners as $sc_id => $sc_info ) :
+									$cat_count = 0;
+									if ( isset( $raw_category_map[ $sc_id ] ) && is_array( $raw_category_map[ $sc_id ] ) ) {
+										$cat_count = count( $raw_category_map[ $sc_id ] );
+									}
+								?>
+									<option value="<?php echo esc_attr( $sc_id ); ?>">
+										<?php echo esc_html( $sc_info['label'] ); ?> (<?php echo esc_html( $cat_count ); ?>)
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+
+						<!-- Detection Status Filter (Only relevant statuses) -->
+						<div class="accessai-filter-col">
+							<label for="accessai-filter-status" class="accessai-filter-field-label">Detection Status</label>
+							<select id="accessai-filter-status" class="accessai-filter-select">
+								<option value="all">All Statuses</option>
+								<?php foreach ( $active_statuses as $st_name ) : ?>
+									<option value="<?php echo esc_attr( $st_name ); ?>">
+										<?php echo esc_html( $st_name ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</div>
+
+						<!-- Sorting Options -->
+						<div class="accessai-filter-col">
+							<label for="accessai-sort-select" class="accessai-filter-field-label">Sort By</label>
+							<select id="accessai-sort-select" class="accessai-filter-select">
+								<option value="highest" selected>Highest Priority First</option>
+								<option value="lowest">Lowest Priority First</option>
+								<option value="category">Issue Category (A–Z)</option>
+								<option value="wcag">WCAG Criterion</option>
+								<option value="url">Page URL</option>
+							</select>
+						</div>
+
+						<!-- Actions -->
+						<div class="accessai-filter-col accessai-filter-action-col">
+							<span class="accessai-filter-field-label">&nbsp;</span>
+							<button type="button" id="accessai-clear-filters-btn" class="button accessai-clear-btn" title="Reset all filters and sort">
+								<span class="dashicons dashicons-undo"></span>
+								<span>Clear Filters</span>
+							</button>
+						</div>
+					</div>
+
+					<!-- Counter & View Switcher Bar -->
+					<div class="accessai-filter-footer-bar">
+						<div class="accessai-filter-count-badge">
+							<span id="accessai-filter-counter-text">
+								Showing <strong id="accessai-visible-count"><?php echo esc_html( count( $normalized_findings ) ); ?></strong> of <strong><?php echo esc_html( count( $normalized_findings ) ); ?></strong> findings
+							</span>
+						</div>
+						<div class="accessai-view-tabs" role="tablist" aria-label="Findings View Mode">
+							<button type="button" class="accessai-view-tab is-active" id="accessai-tab-prioritized" data-target="prioritized" role="tab" aria-selected="true">
+								<span class="dashicons dashicons-sort"></span>
+								<span>Prioritized Stream</span>
+							</button>
+							<button type="button" class="accessai-view-tab" id="accessai-tab-category" data-target="category" role="tab" aria-selected="false">
+								<span class="dashicons dashicons-category"></span>
+								<span>Category Sections</span>
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Empty State when Filter Matches 0 Findings -->
+			<div id="accessai-no-filter-results" class="accessai-empty-state accessai-filter-empty" style="display: none;">
+				<div class="accessai-empty-icon"><span class="dashicons dashicons-filter"></span></div>
+				<div class="accessai-empty-text">
+					<h4>No accessibility findings match your filter criteria</h4>
+					<p>Try clearing your search query or selecting a different priority or category.</p>
+					<button type="button" id="accessai-empty-reset-btn" class="button button-primary accessai-reset-filters-btn">
+						<span class="dashicons dashicons-undo"></span> Reset All Filters
+					</button>
+				</div>
+			</div>
+
+			<!-- ============================================================
+			     PRIORITIZED MASTER FINDINGS VIEW (DEFAULT VIEW)
+			     ============================================================ -->
+			<div id="accessai-prioritized-view" class="accessai-view-panel is-active">
+				<?php if ( empty( $normalized_findings ) ) : ?>
+					<div class="accessai-empty-state accessai-empty-pass">
+						<div class="accessai-empty-icon"><span class="dashicons dashicons-yes-alt"></span></div>
+						<div class="accessai-empty-text">
+							<h4>No accessibility defects detected</h4>
+							<p>This page passed all 10 automated WCAG compliance checkpoints without defects.</p>
+						</div>
+					</div>
+				<?php else : ?>
+					<div class="accessai-findings-stream" id="accessai-findings-stream">
+						<?php foreach ( $normalized_findings as $f_idx => $finding ) :
+							$status_class = ( $finding['status'] === 'Verified Failure' )
+								? 'accessai-status-failure'
+								: ( ( $finding['status'] === 'Potential Issue' ) ? 'accessai-status-potential' : 'accessai-status-manual' );
+						?>
+							<article class="accessai-finding-card accessai-priority-<?php echo esc_attr( $finding['priority'] ); ?>"
+									 id="<?php echo esc_attr( $finding['id'] ); ?>"
+									 data-finding-id="<?php echo esc_attr( $finding['id'] ); ?>"
+									 data-fingerprint="<?php echo esc_attr( $finding['fingerprint'] ); ?>"
+									 data-priority="<?php echo esc_attr( $finding['priority'] ); ?>"
+									 data-priority-weight="<?php echo esc_attr( $finding['priority_weight'] ); ?>"
+									 data-category="<?php echo esc_attr( $finding['category_id'] ); ?>"
+									 data-category-label="<?php echo esc_attr( $finding['category_label'] ); ?>"
+									 data-status="<?php echo esc_attr( $finding['status'] ); ?>"
+									 data-wcag="<?php echo esc_attr( $finding['wcag_criterion'] ); ?>"
+									 data-url="<?php echo esc_attr( $finding['page_url'] ); ?>"
+									 data-search-text="<?php echo esc_attr( $finding['search_text'] ); ?>"
+									 data-original-order="<?php echo esc_attr( $f_idx ); ?>"
+									 data-page-id="<?php echo esc_attr( $finding['page_id'] ); ?>"
+									 data-image-src="<?php echo esc_attr( $finding['raw']['image_src'] ?? '' ); ?>">
+
+								<!-- Finding Header -->
+								<header class="accessai-card-header">
+									<div class="accessai-card-badge-row">
+										<!-- Priority Label Badge -->
+										<span class="accessai-priority-badge is-<?php echo esc_attr( $finding['priority'] ); ?>">
+											<span class="dashicons <?php echo $finding['priority'] === 'critical' ? 'dashicons-dismiss' : ( $finding['priority'] === 'high' ? 'dashicons-warning' : ( $finding['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+											<span><?php echo esc_html( $finding['priority_label'] ); ?></span>
+										</span>
+
+										<?php if ( $finding['is_provisional'] ) : ?>
+											<span class="accessai-provisional-pill" title="Unverified finding requiring manual confirmation">Provisional</span>
+										<?php endif; ?>
+
+										<!-- Issue Category -->
+										<span class="accessai-category-badge">
+											<?php echo esc_html( $finding['category_label'] ); ?>
+										</span>
+
+										<!-- WCAG Reference -->
+										<span class="accessai-wcag-badge" title="<?php echo esc_attr( $finding['wcag'] ); ?>">
+											<?php echo esc_html( $finding['wcag_criterion'] . ' ' . $finding['wcag_level'] ); ?>
+										</span>
+									</div>
+
+									<div class="accessai-card-status-wrap">
+										<span class="accessai-status-badge <?php echo esc_attr( $status_class ); ?>">
+											<?php echo esc_html( $finding['status_label'] ); ?>
+										</span>
+									</div>
+								</header>
+
+								<!-- Finding Body -->
+								<div class="accessai-card-body">
+									<h4 class="accessai-card-title"><?php echo esc_html( $finding['title'] ); ?></h4>
+									<p class="accessai-card-desc"><?php echo esc_html( $finding['description'] ); ?></p>
+
+									<!-- Affected Page or Element -->
+									<div class="accessai-card-element-row">
+										<span class="accessai-row-label">Affected Target:</span>
+										<div class="accessai-card-element-content">
+											<?php echo $finding['element_html']; ?>
+										</div>
+									</div>
+
+									<!-- Recommended Remediation -->
+									<?php if ( ! empty( $finding['remediation'] ) ) : ?>
+										<div class="accessai-card-remediation-row">
+											<span class="dashicons dashicons-lightbulb accessai-remediation-icon"></span>
+											<div class="accessai-remediation-content">
+												<strong>Recommended Remediation:</strong> <?php echo esc_html( $finding['remediation'] ); ?>
+											</div>
+										</div>
+									<?php endif; ?>
+								</div>
+
+								<!-- AI Explanation & Actions -->
+								<footer class="accessai-card-footer">
+									<div class="accessai-ai-cell" data-fingerprint="<?php echo esc_attr( $finding['fingerprint'] ); ?>">
+										<span class="accessai-spinner" aria-label="Loading AI explanation"></span>
+									</div>
+									<div class="accessai-card-actions">
+										<?php if ( $finding['page_id'] ) : ?>
+											<a class="button button-secondary accessai-action-btn"
+											   href="<?php echo esc_url( get_edit_post_link( $finding['page_id'] ) ); ?>"
+											   target="_blank"
+											   title="Edit page in WordPress editor">
+												<span class="dashicons dashicons-edit"></span> Edit Page
+											</a>
+										<?php endif; ?>
+									</div>
+								</footer>
+							</article>
+						<?php endforeach; ?>
+					</div>
+				<?php endif; ?>
+			</div>
+
+			<!-- ============================================================
+			     DETAILED CATEGORY SECTIONS (10 CHECKPOINTS)
+			     ============================================================ -->
+			<div id="accessai-category-view" class="accessai-view-panel">
+
+			<!-- ============================================================
 			     1. ALT TEXT SCAN RESULTS
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="alt_text">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-alt">
@@ -533,11 +936,26 @@ function accessai_render_dashboard() {
 							<tbody>
 								<?php foreach ( $alt_issues as $issue ) :
 									$fp = md5( 'alt_text|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['image_src'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $issue, 'alt_text' );
+									$search_text = strtolower( ( $issue['type'] ?? '' ) . ' ' . ( $issue['image_src'] ?? '' ) . ' 1.1.1 Image Alternative Text Verified Failure ' . $p_calc['priority_label'] );
 								?>
 									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
 										data-page-id="<?php echo esc_attr( $issue['page_id'] ?? '' ); ?>"
-										data-image-src="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>">
-										<td><strong><?php echo esc_html( $issue['type'] ); ?></strong></td>
+										data-image-src="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="alt_text"
+										data-status="Verified Failure"
+										data-wcag="1.1.1"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $issue['type'] ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge accessai-status-failure">Verified Failure</span></td>
 										<td class="accessai-wrap-col" title="<?php echo esc_attr( $issue['image_src'] ?? '' ); ?>">
 											<code><?php echo $issue['image_src'] ? esc_html( $issue['image_src'] ) : 'N/A'; ?></code>
@@ -563,7 +981,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     2. HEADING STRUCTURE SCAN RESULTS
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="heading_structure">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-heading">
@@ -608,9 +1026,24 @@ function accessai_render_dashboard() {
 							<tbody>
 								<?php foreach ( $heading_issues as $issue ) :
 									$fp = md5( 'heading_structure|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['previous'] ?? '' ) . '|' . ( $issue['current'] ?? '' ) . '|' . ( $issue['heading_text'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $issue, 'heading_structure' );
+									$search_text = strtolower( ( $issue['type'] ?? '' ) . ' ' . ( $issue['previous'] ?? '' ) . ' ' . ( $issue['current'] ?? '' ) . ' ' . ( $issue['heading_text'] ?? '' ) . ' 1.3.1 Heading Hierarchy Potential Issue ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $issue['type'] ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="heading_structure"
+										data-status="Potential Issue"
+										data-wcag="1.3.1"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $issue['type'] ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge accessai-status-potential">Potential Issue</span></td>
 										<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $issue['previous'] . ' → ' . $issue['current'] ); ?></span></td>
 										<td class="accessai-wrap-col"><em><?php echo esc_html( $issue['heading_text'] ?: '(Empty heading)' ); ?></em></td>
@@ -635,7 +1068,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     3. FORM LABEL SCAN RESULTS
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="form_label">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-forms">
@@ -680,9 +1113,24 @@ function accessai_render_dashboard() {
 							<tbody>
 								<?php foreach ( $form_issues as $issue ) :
 									$fp = md5( 'form_label|' . ( $issue['page_id'] ?? '' ) . '|' . ( $issue['control'] ?? '' ) . '|' . ( $issue['field_name'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $issue, 'form_label' );
+									$search_text = strtolower( ( $issue['type'] ?? '' ) . ' ' . ( $issue['control'] ?? '' ) . ' ' . ( $issue['field_name'] ?? '' ) . ' 3.3.2 Form Labels Verified Failure ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $issue['type'] ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="form_label"
+										data-status="Verified Failure"
+										data-wcag="3.3.2"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $issue['type'] ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge accessai-status-failure">Verified Failure</span></td>
 										<td>
 											<span class="accessai-tag"><?php echo esc_html( $issue['control'] ); ?></span>
@@ -712,7 +1160,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     4. COLOUR CONTRAST SCAN RESULTS
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="color_contrast">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-contrast">
@@ -767,9 +1215,24 @@ function accessai_render_dashboard() {
 							<tbody>
 								<?php foreach ( $contrast_results as $idx => $result ) :
 									$fp = md5( 'color_contrast|' . ( $result['element'] ?? '' ) . '|' . ( $result['text'] ?? '' ) . '|' . ( $result['ratio'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $result, 'color_contrast' );
+									$search_text = strtolower( ( $result['element'] ?? '' ) . ' ' . ( $result['text'] ?? '' ) . ' ' . ( $result['ratio'] ?? '' ) . ' 1.4.3 Colour Contrast Verified Failure ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><code><?php echo esc_html( $result['element'] ?? '' ); ?></code></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="color_contrast"
+										data-status="Verified Failure"
+										data-wcag="1.4.3"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<code><?php echo esc_html( $result['element'] ?? '' ); ?></code>
+										</td>
 										<td><span class="accessai-status-badge accessai-status-failure">Verified Failure</span></td>
 										<td class="accessai-wrap-col"><span class="accessai-text-sample"><?php echo esc_html( $result['text'] ?? '' ); ?></span></td>
 										<td><span class="accessai-badge accessai-badge-warn"><?php echo esc_html( $result['ratio'] ?? '' ); ?></span></td>
@@ -788,7 +1251,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     5. KEYBOARD ACCESSIBILITY & TRAPS
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="keyboard">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-keyboard">
@@ -835,9 +1298,24 @@ function accessai_render_dashboard() {
 										? 'accessai-status-failure'
 										: ( ( $k_issue['status'] ?? '' ) === 'Potential Issue' ? 'accessai-status-potential' : 'accessai-status-manual' );
 									$fp = md5( 'keyboard|' . ( $k_issue['type'] ?? '' ) . '|' . ( $k_issue['element'] ?? '' ) . '|' . ( $k_issue['context'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $k_issue, 'keyboard' );
+									$search_text = strtolower( ( $k_issue['type'] ?? '' ) . ' ' . strip_tags( $k_issue['element'] ?? '' ) . ' ' . ( $k_issue['context'] ?? '' ) . ' ' . ( $k_issue['message'] ?? '' ) . ' 2.1.1 Keyboard ' . ( $k_issue['status'] ?? '' ) . ' ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $k_issue['type'] ?? 'Keyboard Finding' ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="keyboard"
+										data-status="<?php echo esc_attr( $k_issue['status'] ?? 'Potential Issue' ); ?>"
+										data-wcag="2.1.1"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $k_issue['type'] ?? 'Keyboard Finding' ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge <?php echo esc_attr( $status_class ); ?>"><?php echo esc_html( $k_issue['status'] ?? 'Potential Issue' ); ?></span></td>
 										<td class="accessai-wrap-col">
 											<code><?php echo wp_kses_post( $k_issue['element'] ?? '' ); ?></code>
@@ -860,7 +1338,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     6. LINK ACCESSIBILITY & CONTEXT
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="links">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-links">
@@ -907,9 +1385,24 @@ function accessai_render_dashboard() {
 										? 'accessai-status-failure'
 										: 'accessai-status-potential';
 									$fp = md5( 'links|' . ( $l_issue['type'] ?? '' ) . '|' . ( $l_issue['link_url'] ?? '' ) . '|' . ( $l_issue['link_text'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $l_issue, 'links' );
+									$search_text = strtolower( ( $l_issue['type'] ?? '' ) . ' ' . ( $l_issue['link_text'] ?? '' ) . ' ' . ( $l_issue['link_url'] ?? '' ) . ' 2.4.4 Link Accessibility ' . ( $l_issue['status'] ?? '' ) . ' ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $l_issue['type'] ?? 'Link Finding' ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="links"
+										data-status="<?php echo esc_attr( $l_issue['status'] ?? 'Potential Issue' ); ?>"
+										data-wcag="2.4.4"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $l_issue['type'] ?? 'Link Finding' ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge <?php echo esc_attr( $l_status_class ); ?>"><?php echo esc_html( $l_issue['status'] ?? 'Potential Issue' ); ?></span></td>
 										<td class="accessai-wrap-col"><code><?php echo esc_html( $l_issue['link_text'] ?? '(empty)' ); ?></code></td>
 										<td class="accessai-wrap-col"><span class="accessai-url-pill"><?php echo esc_html( $l_issue['link_url'] ?? '' ); ?></span></td>
@@ -927,7 +1420,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     7. BUTTON ACCESSIBILITY
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="buttons">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-buttons">
@@ -974,9 +1467,24 @@ function accessai_render_dashboard() {
 										? 'accessai-status-failure'
 										: 'accessai-status-potential';
 									$fp = md5( 'buttons|' . ( $b_issue['type'] ?? '' ) . '|' . ( $b_issue['element'] ?? '' ) . '|' . ( $b_issue['button_text'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $b_issue, 'buttons' );
+									$search_text = strtolower( ( $b_issue['type'] ?? '' ) . ' ' . strip_tags( $b_issue['element'] ?? '' ) . ' ' . ( $b_issue['button_text'] ?? '' ) . ' ' . ( $b_issue['message'] ?? '' ) . ' 4.1.2 Buttons ' . ( $b_issue['status'] ?? '' ) . ' ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $b_issue['type'] ?? 'Button Issue' ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="buttons"
+										data-status="<?php echo esc_attr( $b_issue['status'] ?? 'Verified Failure' ); ?>"
+										data-wcag="4.1.2"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $b_issue['type'] ?? 'Button Issue' ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge <?php echo esc_attr( $b_status_class ); ?>"><?php echo esc_html( $b_issue['status'] ?? 'Verified Failure' ); ?></span></td>
 										<td class="accessai-wrap-col"><?php echo wp_kses_post( $b_issue['element'] ?? '' ); ?></td>
 										<td class="accessai-wrap-col"><?php echo esc_html( $b_issue['message'] ?? '' ); ?></td>
@@ -994,7 +1502,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     8. TEXT RESIZING & SPACING
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="text_spacing">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-text">
@@ -1036,9 +1544,24 @@ function accessai_render_dashboard() {
 										? 'accessai-status-failure'
 										: 'accessai-status-potential';
 									$fp = md5( 'text_spacing|' . ( $ts_issue['type'] ?? '' ) . '|' . ( $ts_issue['element'] ?? '' ) . '|' . ( $ts_issue['sample'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $ts_issue, 'text_spacing' );
+									$search_text = strtolower( ( $ts_issue['type'] ?? '' ) . ' ' . ( $ts_issue['element'] ?? '' ) . ' ' . ( $ts_issue['sample'] ?? '' ) . ' 1.4.4 Text Resizing ' . ( $ts_issue['status'] ?? '' ) . ' ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $ts_issue['type'] ?? 'Text Spacing Finding' ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="text_spacing"
+										data-status="<?php echo esc_attr( $ts_issue['status'] ?? 'Verified Failure' ); ?>"
+										data-wcag="1.4.4"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $ts_issue['type'] ?? 'Text Spacing Finding' ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge <?php echo esc_attr( $ts_status_class ); ?>"><?php echo esc_html( $ts_issue['status'] ?? 'Verified Failure' ); ?></span></td>
 										<td><code><?php echo esc_html( $ts_issue['element'] ?? '' ); ?></code></td>
 										<td class="accessai-wrap-col"><em><?php echo esc_html( $ts_issue['sample'] ?? '' ); ?></em></td>
@@ -1073,7 +1596,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     9. FOCUS VISIBILITY
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="focus">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-focus">
@@ -1114,9 +1637,24 @@ function accessai_render_dashboard() {
 										? 'accessai-status-failure'
 										: 'accessai-status-potential';
 									$fp = md5( 'focus|' . ( $f_issue['type'] ?? '' ) . '|' . ( $f_issue['element'] ?? '' ) . '|' . ( $f_issue['target_text'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $f_issue, 'focus' );
+									$search_text = strtolower( ( $f_issue['type'] ?? '' ) . ' ' . ( $f_issue['element'] ?? '' ) . ' ' . ( $f_issue['target_text'] ?? '' ) . ' 2.4.7 Focus Visible ' . ( $f_issue['status'] ?? '' ) . ' ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $f_issue['type'] ?? 'Focus Finding' ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="focus"
+										data-status="<?php echo esc_attr( $f_issue['status'] ?? 'Verified Failure' ); ?>"
+										data-wcag="2.4.7"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $f_issue['type'] ?? 'Focus Finding' ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge <?php echo esc_attr( $f_status_class ); ?>"><?php echo esc_html( $f_issue['status'] ?? 'Verified Failure' ); ?></span></td>
 										<td class="accessai-wrap-col">
 											<code><?php echo esc_html( $f_issue['element'] ?? '' ); ?></code>
@@ -1153,7 +1691,7 @@ function accessai_render_dashboard() {
 			<!-- ============================================================
 			     10. TABLE ACCESSIBILITY
 			     ============================================================ -->
-			<div class="accessai-section">
+			<div class="accessai-section" data-category="tables">
 				<div class="accessai-section-header">
 					<div class="accessai-section-title-wrap">
 						<div class="accessai-section-icon-chip accessai-icon-tables">
@@ -1200,9 +1738,24 @@ function accessai_render_dashboard() {
 										? 'accessai-status-failure'
 										: ( ( $t_issue['status'] ?? '' ) === 'Potential Issue' ? 'accessai-status-potential' : 'accessai-status-manual' );
 									$fp = md5( 'tables|' . ( $t_issue['type'] ?? '' ) . '|' . ( $t_issue['element'] ?? '' ) . '|' . ( $t_issue['table_summary'] ?? '' ) );
+									$p_calc = accessai_calculate_issue_priority( $t_issue, 'tables' );
+									$search_text = strtolower( ( $t_issue['type'] ?? '' ) . ' ' . strip_tags( $t_issue['element'] ?? '' ) . ' ' . ( $t_issue['table_summary'] ?? '' ) . ' ' . ( $t_issue['message'] ?? '' ) . ' 1.3.1 Table Accessibility ' . ( $t_issue['status'] ?? '' ) . ' ' . $p_calc['priority_label'] );
 								?>
-									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>">
-										<td><strong><?php echo esc_html( $t_issue['type'] ?? 'Table Finding' ); ?></strong></td>
+									<tr data-fingerprint="<?php echo esc_attr( $fp ); ?>"
+										data-priority="<?php echo esc_attr( $p_calc['priority'] ); ?>"
+										data-priority-weight="<?php echo esc_attr( $p_calc['priority_weight'] ); ?>"
+										data-category="tables"
+										data-status="<?php echo esc_attr( $t_issue['status'] ?? 'Verified Failure' ); ?>"
+										data-wcag="1.3.1"
+										data-url="<?php echo esc_url( get_permalink( $active_page_id ) ); ?>"
+										data-search-text="<?php echo esc_attr( $search_text ); ?>">
+										<td>
+											<span class="accessai-priority-badge is-<?php echo esc_attr( $p_calc['priority'] ); ?>">
+												<span class="dashicons <?php echo $p_calc['priority'] === 'critical' ? 'dashicons-dismiss' : ( $p_calc['priority'] === 'high' ? 'dashicons-warning' : ( $p_calc['priority'] === 'medium' ? 'dashicons-info' : 'dashicons-lightbulb' ) ); ?>"></span>
+												<span><?php echo esc_html( $p_calc['priority_label'] ); ?></span>
+											</span>
+											<strong><?php echo esc_html( $t_issue['type'] ?? 'Table Finding' ); ?></strong>
+										</td>
 										<td><span class="accessai-status-badge <?php echo esc_attr( $t_status_class ); ?>"><?php echo esc_html( $t_issue['status'] ?? 'Verified Failure' ); ?></span></td>
 										<td class="accessai-wrap-col">
 											<?php echo wp_kses_post( $t_issue['element'] ?? '' ); ?>
@@ -1221,6 +1774,8 @@ function accessai_render_dashboard() {
 					</div>
 				<?php endif; ?>
 			</div>
+
+			</div><!-- #accessai-category-view -->
 
 		<?php endif; ?>
 
